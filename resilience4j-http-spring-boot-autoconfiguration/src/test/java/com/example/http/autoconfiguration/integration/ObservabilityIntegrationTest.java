@@ -1,7 +1,11 @@
 package com.example.http.autoconfiguration.integration;
 
-import static com.github.tomakehurst.wiremock.client.WireMock.*;
-import static org.assertj.core.api.Assertions.*;
+import static com.github.tomakehurst.wiremock.client.WireMock.configureFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.ok;
+import static com.github.tomakehurst.wiremock.client.WireMock.serverError;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.example.http.autoconfiguration.TestApplication;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
@@ -14,7 +18,7 @@ import io.micrometer.observation.ObservationRegistry;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -49,22 +53,22 @@ class ObservabilityIntegrationTest {
     static void props(DynamicPropertyRegistry registry) {
         String base = wm.getRuntimeInfo().getHttpBaseUrl();
 
-        // single client, no resilience features turned on
         registry.add("group.http.clients.o11y.base-url", () -> base);
         registry.add("group.http.clients.o11y.resilience.retry-enabled", () -> "false");
         registry.add("group.http.clients.o11y.resilience.circuit-breaker-enabled", () -> "false");
         registry.add("group.http.clients.o11y.resilience.rate-limiter-enabled", () -> "false");
+        registry.add("group.http.clients.o11y.observation-tags.team", () -> "infra");
+        registry.add("group.http.clients.o11y.observation-tags.module", () -> "edge");
     }
 
     @BeforeEach
     void setup() {
         obsHandler.clear();
-
         registry.observationConfig().observationHandler(obsHandler);
 
         configureFor("localhost", wm.getRuntimeInfo().getHttpPort());
-        stubFor(get("/ping").willReturn(ok("pong")));
-        stubFor(get("/error").willReturn(serverError()));
+        wm.stubFor(get("/ping").willReturn(ok("pong")));
+        wm.stubFor(get("/error").willReturn(serverError()));
     }
 
     @Test
@@ -72,49 +76,61 @@ class ObservabilityIntegrationTest {
         String body = clients.get("o11y").get().uri("/ping").retrieve().body(String.class);
         assertThat(body).isEqualTo("pong");
 
-        List<Observation.Context> all = obsHandler.getCompleted();
-        assertThat(all).as("some Observation recorded").isNotEmpty();
+        Observation.Context ctx = findFirstClientObservation();
+        assertThat(ctx).isNotNull();
 
-        List<Observation.Context> ours = all.stream()
-                .filter(ctx -> "http.client.request.resilient".equals(ctx.getName()))
-                .collect(Collectors.toList());
-        assertThat(ours).as("at least one of our custom Observations").isNotEmpty();
+        assertThat(ctx.getLowCardinalityKeyValues())
+                .as("Expected fixed and custom observation tags")
+                .anySatisfy(KeyValueMatcher.of("client", "o11y"))
+                .anySatisfy(KeyValueMatcher.of("http.method", "GET"))
+                .anySatisfy(KeyValueMatcher.of("http.uri", "/ping"))
+                .anySatisfy(KeyValueMatcher.of("team", "infra"))
+                .anySatisfy(KeyValueMatcher.of("module", "edge"));
 
-        Observation.Context ctx = ours.get(0);
-        List<KeyValue> tags = new ArrayList<>();
-        ctx.getLowCardinalityKeyValues().forEach(tags::add);
-
-        assertThat(tags)
-                .extracting(KeyValue::getKey, KeyValue::getValue)
-                .contains(tuple("client", "o11y"), tuple("http.method", "GET"), tuple("http.uri", "/ping"));
+        assertHighCardinalityHints(ctx);
     }
 
     @Test
     void shouldRecordObservationOnError() {
         assertThatThrownBy(
                         () -> clients.get("o11y").get().uri("/error").retrieve().body(String.class))
-                .isInstanceOfAny(Exception.class);
+                .isInstanceOf(Exception.class);
 
-        List<Observation.Context> all = obsHandler.getCompleted();
-        assertThat(all).as("some Observation recorded").isNotEmpty();
+        Observation.Context ctx = findFirstClientObservation();
+        assertThat(ctx).isNotNull();
 
-        List<Observation.Context> ours = all.stream()
+        assertThat(ctx.getLowCardinalityKeyValues())
+                .as("Expected fixed and custom observation tags")
+                .anySatisfy(KeyValueMatcher.of("client", "o11y"))
+                .anySatisfy(KeyValueMatcher.of("http.method", "GET"))
+                .anySatisfy(KeyValueMatcher.of("http.uri", "/error"))
+                .anySatisfy(KeyValueMatcher.of("team", "infra"))
+                .anySatisfy(KeyValueMatcher.of("module", "edge"));
+
+        assertHighCardinalityHints(ctx);
+    }
+
+    private Observation.Context findFirstClientObservation() {
+        return obsHandler.getCompleted().stream()
                 .filter(ctx -> "http.client.request.resilient".equals(ctx.getName()))
-                .collect(Collectors.toList());
-        assertThat(ours).as("at least one of our custom Observations").isNotEmpty();
+                .findFirst()
+                .orElse(null);
+    }
 
-        Observation.Context ctx = ours.get(0);
-        List<KeyValue> tags = new ArrayList<>();
-        ctx.getLowCardinalityKeyValues().forEach(tags::add);
+    private void assertHighCardinalityHints(Observation.Context ctx) {
+        if (ctx.getHighCardinalityKeyValues().stream()
+                .anyMatch(kv -> kv.getKey().equals("duration.ms"))) {
+            KeyValue dur = ctx.getHighCardinalityKeyValues().stream()
+                    .filter(kv -> kv.getKey().equals("duration.ms"))
+                    .findFirst()
+                    .orElseThrow();
 
-        assertThat(tags)
-                .extracting(KeyValue::getKey, KeyValue::getValue)
-                .contains(tuple("client", "o11y"), tuple("http.method", "GET"), tuple("http.uri", "/error"));
+            assertThat(dur.getValue()).as("Duration should be a numeric string").matches("\\d+");
+        }
     }
 
     @Configuration(proxyBeanMethods = false)
     static class ObsTestConfig {
-
         @Bean
         public TestObservationHandler testObservationHandler() {
             return new TestObservationHandler();
@@ -151,6 +167,14 @@ class ObservabilityIntegrationTest {
         @Override
         public void onStop(Context context) {
             completed.add(context);
+        }
+    }
+
+    static class KeyValueMatcher {
+        public static Consumer<KeyValue> of(String key, String value) {
+            return kv -> assertThat(kv)
+                    .extracting(KeyValue::getKey, KeyValue::getValue)
+                    .containsExactly(key, value);
         }
     }
 }

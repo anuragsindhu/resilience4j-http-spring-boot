@@ -30,6 +30,8 @@ public class ResilientRestClientProperties {
 
         private Duration readTimeout = Duration.ofSeconds(5);
 
+        private Map<String, String> observationTags = new HashMap<>();
+
         @NestedConfigurationProperty
         private Resilience resilience = new Resilience();
     }
@@ -59,5 +61,9 @@ public class ResilientRestClientProperties {
     public static class RetryWrapper extends RetryProperties.InstanceProperties {
 
         private Set<HttpStatus> retryStatus = new HashSet<>();
+
+        public RetryWrapper() {
+            setWaitDuration(Duration.ofMillis(500));
+        }
     }
 }

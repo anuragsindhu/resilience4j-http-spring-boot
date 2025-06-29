@@ -1,8 +1,11 @@
 # Resilient HTTP Client Starter
 
-A Spring Boot starter that provides plug-and-play **resilience features** (Circuit Breaker, Retry, Rate Limiter) and rich **observability** for HTTP clients, powered by [Resilience4j](https://resilience4j.readme.io/) and [Micrometer](https://micrometer.io/).
+A Spring Boot starter that provides plug-and-play **resilience features** (Circuit Breaker, Retry, Rate Limiter) and
+rich **observability** for HTTP clients, powered by [Resilience4j](https://resilience4j.readme.io/)
+and [Micrometer](https://micrometer.io/).
 
-Built to help developers quickly adopt production-grade, fault-tolerant client-side HTTP logic — with sensible defaults and deep integration into Spring’s `RestClient`.
+Built to help developers quickly adopt production-grade, fault-tolerant client-side HTTP logic — with sensible defaults
+and deep integration into Spring’s `RestClient`.
 
 ---
 
@@ -22,10 +25,11 @@ Built to help developers quickly adopt production-grade, fault-tolerant client-s
 ### 1. Add the starter to your project
 
 ```xml
+
 <dependency>
-  <groupId>com.example</groupId>
-  <artifactId>resilient-http-starter</artifactId>
-  <version>X.X.X</version>
+    <groupId>com.example</groupId>
+    <artifactId>resilient-http-starter</artifactId>
+    <version>X.X.X</version>
 </dependency>
 ```
 
@@ -60,17 +64,20 @@ Built to help developers quickly adopt production-grade, fault-tolerant client-s
 
 ### Retry
 
-| Config property             | Default value                                                  | Description                                                                                                                                                                                                   |
-|-----------------------------|----------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| failAfterMaxAttempts        | FALSE                                                          | A boolean to enable or disable throwing of MaxRetriesExceededException when the Retry has reached the configured maxAttempts, and the result is still not passing the retryOnResultPredicate                  |
-| ignoreExceptions            | empty                                                          | Configures a list of Throwable classes that are ignored and thus are not retried. This parameter supports subtyping.                                                                                          |
-| ~~intervalBiFunction~~      | ~~(numOfAttempts, Either<throwable, result>) -> waitDuration~~ | ~~A function to modify the waiting interval after a failure based on attempt number and result or exception. When used together with intervalFunction will throw an IllegalStateException.~~                  |
-| ~~intervalFunction~~        | ~~numOfAttempts -> waitDuration~~                              | ~~A function to modify the waiting interval after a failure. By default the wait duration remains constant.~~                                                                                                 |
-| maxAttempts                 | 3                                                              | The maximum number of attempts (including the initial call as the first attempt)                                                                                                                              |
-| ~~retryExceptionPredicate~~ | ~~throwable -> true~~                                          | ~~Configures a Predicate which evaluates if an exception should be retried. The Predicate must return true, if the exception should be retried, otherwise it must return false.~~                             |
-| retryExceptions             | empty                                                          | Configures a list of Throwable classes that are recorded as a failure and thus are retried. This parameter supports subtyping.       Note: If you are using Checked Exceptions you must use a CheckedSupplier |
-| ~~retryOnResultPredicate~~  | ~~result -> false~~                                            | ~~Configures a Predicate which evaluates if a result should be retried. The Predicate must return true, if the result should be retried, otherwise it must return false.~~                                    |
-| waitDuration                | 500 [ms]                                                       | A fixed wait duration between retry attempts                                                                                                                                                                  |
+| Config property              | Default value                                                  | Description                                                                                                                                                                                                   |
+|------------------------------|----------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| exponentialBackoffMultiplier | 2.0                                                            | Retry delay doubles with each attempt                                                                                                                                                                         |
+| exponentialMaxWaitDuration   | 1 [m]                                                          | Caps individual retry delay at given value                                                                                                                                                                    |
+| failAfterMaxAttempts         | FALSE                                                          | A boolean to enable or disable throwing of MaxRetriesExceededException when the Retry has reached the configured maxAttempts, and the result is still not passing the retryOnResultPredicate                  |
+| ignoreExceptions             | empty                                                          | Configures a list of Throwable classes that are ignored and thus are not retried. This parameter supports subtyping.                                                                                          |
+| ~~intervalBiFunction~~       | ~~(numOfAttempts, Either<throwable, result>) -> waitDuration~~ | ~~A function to modify the waiting interval after a failure based on attempt number and result or exception. When used together with intervalFunction will throw an IllegalStateException.~~                  |
+| ~~intervalFunction~~         | ~~numOfAttempts -> waitDuration~~                              | ~~A function to modify the waiting interval after a failure. By default the wait duration remains constant.~~                                                                                                 |
+| maxAttempts                  | 3                                                              | The maximum number of attempts (including the initial call as the first attempt)                                                                                                                              |
+| randomizedWaitFactor         | 0.25                                                           | Jitter to each retry interval to avoid retry storms                                                                                                                                                           |
+| ~~retryExceptionPredicate~~  | ~~throwable -> true~~                                          | ~~Configures a Predicate which evaluates if an exception should be retried. The Predicate must return true, if the exception should be retried, otherwise it must return false.~~                             |
+| retryExceptions              | empty                                                          | Configures a list of Throwable classes that are recorded as a failure and thus are retried. This parameter supports subtyping.       Note: If you are using Checked Exceptions you must use a CheckedSupplier |
+| ~~retryOnResultPredicate~~   | ~~result -> false~~                                            | ~~Configures a Predicate which evaluates if a result should be retried. The Predicate must return true, if the result should be retried, otherwise it must return false.~~                                    |
+| waitDuration                 | 500 [ms]                                                       | A fixed wait duration between retry attempts                                                                                                                                                                  |
 
 ### Client Configuration
 
@@ -78,7 +85,7 @@ Built to help developers quickly adopt production-grade, fault-tolerant client-s
 group:
   http:
     clients:
-      my-service:
+      foo-service:
         base-url: https://api.example.com
         connect-timeout: 2s
         read-timeout: 4s
@@ -95,4 +102,15 @@ group:
           rate-limiter:
             limit-for-period: 10
             limit-refresh-period: 1s
+      another-service:
+        base-url: https://api.another-example.com
+        resilience:
+          retry-enabled: true
+          retry:
+            enabled: true
+            exponential-backoff-multiplier: 2.0
+            exponential-max-wait-duration: 2s
+            max-attempts: 5
+            randomized-wait-factor: 0.25
+            wait-duration: 200ms
 ```

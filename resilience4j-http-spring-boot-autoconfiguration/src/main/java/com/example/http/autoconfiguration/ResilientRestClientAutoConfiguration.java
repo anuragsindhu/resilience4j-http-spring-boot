@@ -5,6 +5,7 @@ import com.example.http.autoconfiguration.builder.HttpClientFactory;
 import com.example.http.autoconfiguration.builder.RateLimiterFactory;
 import com.example.http.autoconfiguration.builder.ResilienceHttpRequestInterceptor;
 import com.example.http.autoconfiguration.builder.RetryFactory;
+import com.example.http.autoconfiguration.logging.ResilienceEventPublisherLogger;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.ratelimiter.RateLimiter;
@@ -82,13 +83,14 @@ public class ResilientRestClientAutoConfiguration {
                     ? RateLimiterFactory.create(name, rlRegistry, resilience.getRateLimiter())
                     : null;
 
-            configureEventPublisherLogging(cb, retry, rl);
+            ResilienceEventPublisherLogger.attach(retry, cb, rl, log);
 
             // 3) Build the RestClient, registering our ClientHttpRequestInterceptor
             ResilienceHttpRequestInterceptor resilienceInterceptor = ResilienceHttpRequestInterceptor.builder(
                             observationRegistry)
                     .circuitBreaker(cb)
                     .clientName(name)
+                    .observationTags(cfg.getObservationTags())
                     .rateLimiter(rl)
                     .retry(retry)
                     .retryStatus(statusSet)
@@ -103,57 +105,5 @@ public class ResilientRestClientAutoConfiguration {
             clients.put(name, client);
         }
         return clients;
-    }
-
-    private void configureEventPublisherLogging(CircuitBreaker cb, Retry retry, RateLimiter rl) {
-        if (cb != null) {
-            cb.getEventPublisher()
-                    .onStateTransition(event -> log.info(
-                            "Circuit breaker[{}] state transition from {} to {}",
-                            cb.getName(),
-                            event.getStateTransition().getFromState(),
-                            event.getStateTransition().getToState()))
-                    .onCallNotPermitted(
-                            event -> log.warn("Circuit breaker[{}] call not permitted (circuit is OPEN)", cb.getName()))
-                    .onError(event -> log.error(
-                            "Circuit breaker[{}] error recorded: {}",
-                            cb.getName(),
-                            event.getThrowable().toString()))
-                    .onSuccess(event -> log.debug(
-                            "Circuit breaker[{}] call succeeded in {}ms",
-                            cb.getName(),
-                            event.getElapsedDuration().toMillis()));
-        }
-
-        if (retry != null) {
-            retry.getEventPublisher()
-                    .onRetry(event -> log.info(
-                            "Retry[{}] retry attempt #{} due to {}",
-                            retry.getName(),
-                            event.getNumberOfRetryAttempts(),
-                            event.getLastThrowable().toString()))
-                    .onSuccess(event -> log.info(
-                            "Retry[{}] call succeeded after {} attempts",
-                            retry.getName(),
-                            event.getNumberOfRetryAttempts()))
-                    .onError(event -> log.warn(
-                            "Retry[{}] retries exhausted after {} attempts; last error: {}",
-                            retry.getName(),
-                            event.getNumberOfRetryAttempts(),
-                            event.getLastThrowable().toString()))
-                    .onIgnoredError(event -> log.trace(
-                            "Retry[{}] error ignored (not ble): {}",
-                            retry.getName(),
-                            event.getLastThrowable().toString()));
-        }
-
-        if (rl != null) {
-            rl.getEventPublisher()
-                    .onSuccess(event ->
-                            log.debug("Rate limiter[{}] permission granted: {}", rl.getName(), event.getEventType()))
-                    .onFailure(
-                            event -> log.warn("Rate limiter[{}] call blocked: {}", rl.getName(), event.getEventType()))
-                    .onEvent(event -> log.trace("Rate limiter[{}] full event: {}", rl.getName(), event));
-        }
     }
 }

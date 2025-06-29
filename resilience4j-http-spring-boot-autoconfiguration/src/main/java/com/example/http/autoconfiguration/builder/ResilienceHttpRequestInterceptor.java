@@ -1,5 +1,6 @@
 package com.example.http.autoconfiguration.builder;
 
+import com.example.http.autoconfiguration.observation.ResilienceObservationTagContributor;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.core.functions.CheckedSupplier;
@@ -10,6 +11,7 @@ import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationRegistry;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import org.springframework.http.HttpRequest;
@@ -25,27 +27,32 @@ import org.springframework.web.client.RestClientException;
 public class ResilienceHttpRequestInterceptor implements ClientHttpRequestInterceptor {
 
     private final ObservationRegistry registry;
+    private final Map<String, String> observationTags;
     private final String clientName;
     private final CircuitBreaker circuitBreaker;
     private final Retry retry;
     private final RateLimiter rateLimiter;
     private final Set<HttpStatus> retryStatus;
 
-    private ResilienceHttpRequestInterceptor(Builder b) {
-        this.registry = b.registry;
-        this.clientName = b.clientName;
-        this.circuitBreaker = b.circuitBreaker;
-        this.retry = b.retry;
-        this.rateLimiter = b.rateLimiter;
-        this.retryStatus = b.retryStatus;
+    private ResilienceHttpRequestInterceptor(Builder builder) {
+        this.registry = builder.registry;
+        this.clientName = builder.clientName;
+        this.circuitBreaker = builder.circuitBreaker;
+        this.observationTags = builder.observationTags;
+        this.retry = builder.retry;
+        this.rateLimiter = builder.rateLimiter;
+        this.retryStatus = builder.retryStatus;
     }
 
     @Override
     public ClientHttpResponse intercept(HttpRequest request, byte[] body, ClientHttpRequestExecution execution)
             throws IOException {
 
-        return Objects.requireNonNull(Observation.createNotStarted("http.client.request.resilient", registry)
-                .lowCardinalityKeyValue("client", clientName)
+        Observation obs = Observation.createNotStarted("http.client.request.resilient", registry);
+        ResilienceObservationTagContributor.contribute(
+                obs, clientName, circuitBreaker, retry, rateLimiter, observationTags);
+
+        return Objects.requireNonNull(obs.lowCardinalityKeyValue("client", clientName)
                 .lowCardinalityKeyValue("http.method", request.getMethod().name())
                 .lowCardinalityKeyValue("http.uri", request.getURI().getPath())
                 .observeChecked(() -> {
@@ -108,6 +115,7 @@ public class ResilienceHttpRequestInterceptor implements ClientHttpRequestInterc
 
     public static class Builder {
         private final ObservationRegistry registry;
+        private Map<String, String> observationTags;
         private String clientName;
         private CircuitBreaker circuitBreaker;
         private Retry retry;
@@ -116,6 +124,11 @@ public class ResilienceHttpRequestInterceptor implements ClientHttpRequestInterc
 
         private Builder(ObservationRegistry registry) {
             this.registry = registry;
+        }
+
+        public Builder observationTags(Map<String, String> observationTags) {
+            this.observationTags = observationTags;
+            return this;
         }
 
         public Builder clientName(String clientName) {
