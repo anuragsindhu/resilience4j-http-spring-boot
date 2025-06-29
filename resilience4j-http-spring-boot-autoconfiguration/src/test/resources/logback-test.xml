@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!--
+      Include Spring Boot's default logging configuration.
+      This file sets up baseline properties and encoders that Spring Boot relies on.
+    -->
+    <include resource="org/springframework/boot/logging/logback/defaults.xml" />
+
+    <property name="LOG_FILE" value="${LOG_FILE:-${LOG_PATH:-${LOG_TEMP:-${java.io.tmpdir:-/tmp}}/}spring.log}" />
+    <property name="applicationVersion" value="${application.version:--}" />
+    <property name="applicationActiveProfile" value="${application.activeProfile:--}" />
+
+    <!--
+      Bind log level properties from the Spring Boot environment.
+      These properties allow external override via application.yml.
+      If not provided externally, the default value is used.
+    -->
+    <springProperty scope="context" name="applicationName" source="spring.application.name" />
+    <springProperty scope="context" name="ROOT_LEVEL" source="logging.level.root" defaultValue="INFO" />
+
+    <!--
+      Bind properties for file logging.
+      The LOG_FILE property defines the file path.
+      MAX_FILE_SIZE defines the maximum log file size before rollover.
+      MAX_HISTORY defines the number of rollover files to keep.
+    -->
+    <springProperty scope="context" name="LOG_FILE" source="logging.file.name" defaultValue="logs/app.log" />
+    <springProperty scope="context" name="MAX_FILE_SIZE" source="logging.file.max-size" defaultValue="10MB" />
+    <springProperty scope="context" name="MAX_HISTORY" source="logging.file.max-history" defaultValue="30" />
+
+    <!--
+      Include the default console appender provided by Spring Boot.
+      This is a basic console appender; we will also define a customized version below.
+    -->
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml" />
+
+    <!--===================================================================
+         Custom Console Appender with Advanced Pattern and Filtering
+         - Uses a custom pattern with color conversion (%clr) for readability.
+         - Applies a ThresholdFilter to only log messages at or above INFO level.
+    =====================================================================-->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <!-- Encoder: Defines the log format -->
+        <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+            <providers>
+                <timestamp>
+                    <pattern>yyyy-MM-dd'T'HH:mm:ss.SSSX</pattern>
+                    <timeZone>UTC</timeZone>
+                </timestamp>
+                <message/>
+                <logLevel/>
+                <pattern>
+                    <omitEmptyFields>false</omitEmptyFields>
+                    <pattern>
+                        {
+                        "application_name": "${applicationName}",
+                        "version": "${applicationVersion}",
+                        "active_profile": "${applicationActiveProfile}"
+                        }
+                    </pattern>
+                </pattern>
+                <pattern>
+                    <omitEmptyFields>true</omitEmptyFields>
+                    <pattern>
+                        {
+                        "http_context": "#tryJson{%mdc{http_context}}"
+                        }
+                    </pattern>
+                </pattern>
+                <mdc>
+                    <excludeMdcKeyName>http_context</excludeMdcKeyName>
+                </mdc>
+                <loggerName/>
+                <threadName/>
+                <!--EXCEPTION's PART-->
+                <throwableMessage>
+                    <fieldName>exception_message</fieldName>
+                </throwableMessage>
+                <throwableRootCauseClassName>
+                    <fieldName>exception_class</fieldName>
+                    <useSimpleClassName>false</useSimpleClassName>
+                </throwableRootCauseClassName>
+                <stackTrace>
+                    <fieldName>exception_stack_trace</fieldName>
+                    <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
+                        <shortenedClassNameLength>20</shortenedClassNameLength>
+                        <rootCauseFirst>true</rootCauseFirst>
+                    </throwableConverter>
+                </stackTrace>
+            </providers>
+        </encoder>
+    </appender>
+
+    <!--===================================================================
+         File Appender Definition (RollingFileAppender)
+         - Writes log output to a file, with policies for rolling over based on date and file size.
+         - Uses a custom pattern similar to the console output but without colors.
+         - Applies a ThresholdFilter to include DEBUG and higher level events.
+    =====================================================================-->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+            <providers>
+                <timestamp>
+                    <pattern>yyyy-MM-dd'T'HH:mm:ss.SSSX</pattern>
+                    <timeZone>UTC</timeZone>
+                </timestamp>
+                <message/>
+                <logLevel/>
+                <pattern>
+                    <omitEmptyFields>false</omitEmptyFields>
+                    <pattern>
+                        {
+                        "application_name": "${applicationName}",
+                        "version": "${applicationVersion}",
+                        "active_profile": "${applicationActiveProfile}"
+                        }
+                    </pattern>
+                </pattern>
+                <pattern>
+                    <omitEmptyFields>true</omitEmptyFields>
+                    <pattern>
+                        {
+                        "http_context": "#tryJson{%mdc{http_context}}"
+                        }
+                    </pattern>
+                </pattern>
+                <mdc>
+                    <excludeMdcKeyName>http_context</excludeMdcKeyName>
+                </mdc>
+                <loggerName/>
+                <threadName/>
+                <!--EXCEPTION's PART-->
+                <throwableMessage>
+                    <fieldName>exception_message</fieldName>
+                </throwableMessage>
+                <throwableRootCauseClassName>
+                    <fieldName>exception_class</fieldName>
+                    <useSimpleClassName>false</useSimpleClassName>
+                </throwableRootCauseClassName>
+                <stackTrace>
+                    <fieldName>exception_stack_trace</fieldName>
+                    <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
+                        <shortenedClassNameLength>20</shortenedClassNameLength>
+                        <rootCauseFirst>true</rootCauseFirst>
+                    </throwableConverter>
+                </stackTrace>
+            </providers>
+        </encoder>
+
+        <!--Rolling policy configuration-->
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_FILE}-%d{yyyy-MM-dd}.%i</fileNamePattern>
+            <maxFileSize>10MB</maxFileSize>
+            <maxHistory>10</maxHistory>
+            <totalSizeCap>100MB</totalSizeCap>
+        </rollingPolicy>
+
+        <!-- Filter: Only log events at DEBUG level or higher to the file -->
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>INFO</level>
+        </filter>
+    </appender>
+
+    <!--
+         Root Logger
+         - Uses the dynamically bound ROOT_LEVEL property (default is INFO unless overridden).
+         - References both the custom console and asynchronous file appenders.
+    -->
+    <root level="${ROOT_LEVEL}">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </root>
+
+</configuration>
