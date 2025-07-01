@@ -168,3 +168,289 @@ group:
     |<-- response ------------|                                                |
     |                        |                                                 |
 ```
+
+## RESILIENCE4J DEFAULTS
+
+---
+
+### **Retry Configuration Defaults**
+
+| Setting                | Suggested Default         | Why It’s Sensible                                                  |
+|------------------------|---------------------------|---------------------------------------------------------------------|
+| `maxAttempts`          | `3`                       | Limits retries to reduce load amplification                        |
+| `waitDuration`         | `500ms`                   | Reasonable interval before retrying (avoid overwhelming server)     |
+| `exponentialBackoff`   | Enabled (`1.5` multiplier) | Prevents thundering herd problems                                  |
+| `retryOnResult`        | HTTP 5xx / timeout        | Retries only on recoverable conditions                             |
+| `failAfterMaxAttempts` | `true`                    | Surfaces error after N tries, enabling downstream fallback behavior |
+
+In YAML:
+
+```yaml
+retry:
+  instances:
+    default:
+      maxAttempts: 3
+      waitDuration: 500ms
+      exponentialBackoffMultiplier: 1.5
+      retryExceptions:
+        - org.springframework.web.client.HttpServerErrorException
+        - java.io.IOException
+```
+
+---
+
+### **Circuit Breaker Configuration Defaults**
+
+| Setting                       | Suggested Default           | Why It Works                                                       |
+|-------------------------------|-----------------------------|--------------------------------------------------------------------|
+| `slidingWindowType`           | `COUNT_BASED`               | Predictable behavior across low-traffic scenarios                  |
+| `slidingWindowSize`           | `20`                        | Enough samples to be meaningful but still responsive               |
+| `failureRateThreshold`        | `50`                        | Triggers when half the calls fail                                 |
+| `permittedCallsInHalfOpen`    | `3`                         | Small number of test probes after transition                       |
+| `minimumNumberOfCalls`        | `10`                        | Avoids flaky behavior with small sample sizes                      |
+| `waitDurationInOpenState`     | `10s`                       | Gives dependent service time to recover                            |
+
+In YAML:
+
+```yaml
+circuitbreaker:
+  instances:
+    default:
+      slidingWindowSize: 20
+      slidingWindowType: COUNT_BASED
+      failureRateThreshold: 50
+      minimumNumberOfCalls: 10
+      permittedNumberOfCallsInHalfOpenState: 3
+      waitDurationInOpenState: 10s
+```
+
+---
+
+### **Rate Limiter Configuration Defaults**
+
+| Setting                 | Suggested Default     | Why It's Reasonable                                                  |
+|-------------------------|-----------------------|-----------------------------------------------------------------------|
+| `limitForPeriod`        | `10`                  | Allows bursts of 10 calls                                            |
+| `limitRefreshPeriod`    | `1s`                  | Resets quota every second                                            |
+| `timeoutDuration`       | `0`                   | Fail fast if no permit available (change if async fallback desired)  |
+| `registerHealthIndicator` | `true`              | Exposes state for monitoring tools                                   |
+
+In YAML:
+
+```yaml
+ratelimiter:
+  instances:
+    default:
+      limitForPeriod: 10
+      limitRefreshPeriod: 1s
+      timeoutDuration: 0
+```
+
+```java
+package com.example.http;
+
+import com.example.http.autoconfiguration.utils.WireMockErrorScenarioBuilder;
+import com.example.http.testing.TestRestClient;
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.RestClientException;
+
+import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+class ResilienceIntegrationTest {
+
+    @RegisterExtension
+    static WireMockExtension wiremock = WireMockExtension.newInstance()
+        .options(com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig().dynamicPort())
+        .build();
+
+    private TestRestClient client;
+    private WireMockErrorScenarioBuilder stub;
+
+    @BeforeEach
+    void setup() {
+        String baseUrl = wiremock.getRuntimeInfo().getHttpBaseUrl();
+        client = new TestRestClient(baseUrl);
+        stub = WireMockErrorScenarioBuilder.forPort(wiremock.getPort());
+    }
+
+    @Test
+    void shouldRetryOnServerErrorAndEventuallySucceed() {
+        String path = "/resilient";
+        stub.withRetryableEndpoint("retry-scenario", path, 2);
+
+        ResponseEntity<String> response = client.get(path, String.class);
+
+        assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(response.getBody()).isEqualTo("Recovered");
+    }
+
+    @Test
+    void shouldTripCircuitBreakerAfterEnoughFailures() {
+        String path = "/fail-forever";
+        stub.withHttp500(path);
+
+        // Trigger repeated failures
+        for (int i = 0; i < 10; i++) {
+            try {
+                client.get(path, String.class);
+            } catch (Exception ignored) {}
+        }
+
+        // Next call should be blocked by CircuitBreaker
+        assertThatThrownBy(() -> client.get(path, String.class))
+            .isInstanceOf(Exception.class)
+            .hasMessageContaining("Call is not permitted");
+    }
+
+    @Test
+    void shouldEnforceRateLimiting() {
+        String path = "/limited";
+        stub.withStub("GET", path, 200, "ok", java.util.Map.of());
+
+        int allowed = 0;
+        int blocked = 0;
+        for (int i = 0; i < 20; i++) {
+            try {
+                client.get(path, String.class);
+                allowed++;
+            } catch (RestClientException ex) {
+                if (ex.getMessage().contains("Request not permitted")) {
+                    blocked++;
+                }
+            }
+        }
+
+        assertThat(allowed).isLessThanOrEqualTo(10);
+        assertThat(blocked).isGreaterThan(0);
+    }
+
+    @Test
+    void shouldFailOnNetworkDelayBeyondTimeout() {
+        String path = "/timeout";
+        stub.withNetworkTimeout(path);
+
+        assertThatThrownBy(() -> client.get(path, String.class))
+            .isInstanceOf(RestClientException.class)
+            .hasMessageContaining("Read timed out");
+    }
+}
+```
+
+Perfect! With your `WireMockErrorScenarioBuilder` utility now available, we can cleanly and expressively stub out all resilience-related behaviors in tests for `TestRestClient`. Here's the refactored integration test that combines it with the previously discussed sensible defaults for Retry, Circuit Breaker, and Rate Limiter:
+
+---
+
+### `ResilienceIntegrationTest.java`
+
+```java
+package com.example.http;
+
+import com.example.http.autoconfiguration.utils.WireMockErrorScenarioBuilder;
+import com.example.http.testing.TestRestClient;
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.RestClientException;
+
+import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+class ResilienceIntegrationTest {
+
+    @RegisterExtension
+    static WireMockExtension wiremock = WireMockExtension.newInstance()
+        .options(com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig().dynamicPort())
+        .build();
+
+    private TestRestClient client;
+    private WireMockErrorScenarioBuilder stub;
+
+    @BeforeEach
+    void setup() {
+        String baseUrl = wiremock.getRuntimeInfo().getHttpBaseUrl();
+        client = new TestRestClient(baseUrl);
+        stub = WireMockErrorScenarioBuilder.forPort(wiremock.getPort());
+    }
+
+    @Test
+    void shouldRetryOnServerErrorAndEventuallySucceed() {
+        String path = "/resilient";
+        stub.withRetryableEndpoint("retry-scenario", path, 2);
+
+        ResponseEntity<String> response = client.get(path, String.class);
+
+        assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(response.getBody()).isEqualTo("Recovered");
+    }
+
+    @Test
+    void shouldTripCircuitBreakerAfterEnoughFailures() {
+        String path = "/fail-forever";
+        stub.withHttp500(path);
+
+        // Trigger repeated failures
+        for (int i = 0; i < 10; i++) {
+            try {
+                client.get(path, String.class);
+            } catch (Exception ignored) {}
+        }
+
+        // Next call should be blocked by CircuitBreaker
+        assertThatThrownBy(() -> client.get(path, String.class))
+            .isInstanceOf(Exception.class)
+            .hasMessageContaining("Call is not permitted");
+    }
+
+    @Test
+    void shouldEnforceRateLimiting() {
+        String path = "/limited";
+        stub.withStub("GET", path, 200, "ok", java.util.Map.of());
+
+        int allowed = 0;
+        int blocked = 0;
+        for (int i = 0; i < 20; i++) {
+            try {
+                client.get(path, String.class);
+                allowed++;
+            } catch (RestClientException ex) {
+                if (ex.getMessage().contains("Request not permitted")) {
+                    blocked++;
+                }
+            }
+        }
+
+        assertThat(allowed).isLessThanOrEqualTo(10);
+        assertThat(blocked).isGreaterThan(0);
+    }
+
+    @Test
+    void shouldFailOnNetworkDelayBeyondTimeout() {
+        String path = "/timeout";
+        stub.withNetworkTimeout(path);
+
+        assertThatThrownBy(() -> client.get(path, String.class))
+            .isInstanceOf(RestClientException.class)
+            .hasMessageContaining("Read timed out");
+    }
+}
+```
+
+### What This Covers
+
+| Resilience Feature | Builder Method Used                | Test Validates                         |
+|--------------------|------------------------------------|----------------------------------------|
+| Retry              | `withRetryableEndpoint(...)`       | Success after transient failure        |
+| Circuit Breaker    | `withHttp500(...)`                 | Trips after repeated 5xx               |
+| Rate Limiter       | `withStub(...)` (rapid loop)       | Enforces `limitForPeriod`              |
+| Timeout Handling   | `withNetworkTimeout(...)`          | Fails with socket read timeout         |
+
+---
