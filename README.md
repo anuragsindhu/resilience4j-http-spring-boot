@@ -133,3 +133,38 @@ group:
 | `timeToLive`                 | 5 minutes     | Max lifetime of a pooled connection regardless of activity   | Ensures stale connections (e.g. DNS changes, proxy idle) are periodically recycled for fresh connectivity.          |
 | `validateAfterInactivity`    | 30 seconds    | Min idle time before validating a connection in the pool     | Prevents using silently closed TCP connections (common issue in long-lived pools or mobile networks).               |
 
+
+```text
++--------+           +------------------+           +---------+           +------------+
+| Client |           | ConnectionManager|           |  Socket |           |   Server   |
++--------+           +------------------+           +---------+           +------------+
+    |                        |                          |                      |
+    |--- request() --------->|                          |                      |
+    |                        |-- leaseConnection() ---->|                      |
+    |                        |  [connectionRequestTimeout]                     |
+    |                        |                          |                      |
+    |                        |                          |-- connect() -------->|
+    |                        |                          |  [connectTimeout]    |
+    |                        |                          |                      |
+    |                        |                          |  TCP Setup           |
+    |                        |                          |<---------------------|
+    |                        |                          |                      |
+    |                        |                          | setSocketOptions()   |
+    |                        |                          |  └─ [soTimeout]      |
+    |                        |                          |  └─ [rcvBufSize]     |
+    |                        |                          |  └─ [sndBufSize]     |
+    |                        |                          |  └─ [soLinger]       |
+    |                        |                          |  └─ [tcpNoDelay]     |
+    |                        |                          |                      |
+    |                        |                          |-- send HTTP request  |
+    |                        |                          |                      |
+    |                        |                          |<- receive response - |
+    |                        |                          |  [socketTimeout]     |
+    |                        |                          |                      |
+    |                        |<- return connection -----|                      |
+    |                        |  [validateAfterInactivity]                      |
+    |                        |  [timeToLive]                                   |
+    |                        |  [evictIdleConnections (background)]            |
+    |<-- response ------------|                                                |
+    |                        |                                                 |
+```
