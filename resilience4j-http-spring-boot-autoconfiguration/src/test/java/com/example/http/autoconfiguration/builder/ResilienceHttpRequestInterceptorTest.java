@@ -7,7 +7,6 @@ import static org.mockito.Mockito.*;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
-import io.github.resilience4j.core.functions.CheckedSupplier;
 import io.github.resilience4j.ratelimiter.RateLimiter;
 import io.github.resilience4j.ratelimiter.RateLimiterConfig;
 import io.github.resilience4j.ratelimiter.RequestNotPermitted;
@@ -18,7 +17,6 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpRequest;
@@ -106,11 +104,13 @@ class ResilienceHttpRequestInterceptorTest {
 
     @Test
     void shouldPropagateRequestNotPermitted() throws Exception {
-        RateLimiter rl = RateLimiter.of("rl-client", RateLimiterConfig.custom()
-            .limitForPeriod(1)
-            .limitRefreshPeriod(Duration.ofSeconds(60))
-            .timeoutDuration(Duration.ZERO)
-            .build());
+        RateLimiter rl = RateLimiter.of(
+                "rl-client",
+                RateLimiterConfig.custom()
+                        .limitForPeriod(1)
+                        .limitRefreshPeriod(Duration.ofSeconds(60))
+                        .timeoutDuration(Duration.ZERO)
+                        .build());
 
         // Exhaust the single permit
         rl.acquirePermission();
@@ -119,21 +119,21 @@ class ResilienceHttpRequestInterceptorTest {
         when(request.getURI()).thenReturn(URI.create("/rl"));
 
         var interceptor = ResilienceHttpRequestInterceptor.builder(registry)
-            .clientName("rl-client")
-            .rateLimiter(rl)
-            .build();
+                .clientName("rl-client")
+                .rateLimiter(rl)
+                .build();
 
         assertThatThrownBy(() -> interceptor.intercept(request, body, execution))
-            .isInstanceOf(RequestNotPermitted.class);
+                .isInstanceOf(RequestNotPermitted.class);
     }
 
     @Test
     void shouldPropagateCallNotPermitted() throws Exception {
         CircuitBreakerConfig config = CircuitBreakerConfig.custom()
-            .failureRateThreshold(1)
-            .slidingWindowSize(1)
-            .writableStackTraceEnabled(false)
-            .build();
+                .failureRateThreshold(1)
+                .slidingWindowSize(1)
+                .writableStackTraceEnabled(false)
+                .build();
 
         CircuitBreaker cb = CircuitBreaker.of("cb-client", config);
 
@@ -145,11 +145,11 @@ class ResilienceHttpRequestInterceptorTest {
         when(request.getURI()).thenReturn(URI.create("/cb"));
 
         var interceptor = ResilienceHttpRequestInterceptor.builder(registry)
-            .clientName("cb-client")
-            .circuitBreaker(cb)
-            .build();
+                .clientName("cb-client")
+                .circuitBreaker(cb)
+                .build();
 
         assertThatThrownBy(() -> interceptor.intercept(request, body, execution))
-            .isInstanceOf(CallNotPermittedException.class);
+                .isInstanceOf(CallNotPermittedException.class);
     }
 }

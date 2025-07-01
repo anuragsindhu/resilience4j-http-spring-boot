@@ -114,3 +114,22 @@ group:
             randomized-wait-factor: 0.25
             wait-duration: 200ms
 ```
+
+---
+
+## DEFAULTS
+
+| Configuration Parameter      | Default Value | What It Controls                                             | Why This Value Is Sensible                                                                                          |
+|------------------------------|---------------|--------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------|
+| `connectionRequestTimeout`   | 2 seconds     | Max time to wait to lease a connection from the pool         | Prevents queuing delays in high load; 2s is tight enough for fast-failing systems but tolerant of short contention. |
+| `connectTimeout`             | 5 seconds     | Max time to establish a TCP connection                       | Avoids hanging on unreachable hosts or slow networks; 5s gives servers a fair chance without delaying the client.   |
+| `evictIdleConnections`       | 1 minute      | Interval to close idle pooled connections                    | Cleans up unused sockets; helps reclaim resources under bursty or low traffic conditions.                           |
+| `maxConnPerRoute`            | 20            | Max concurrent connections to a single host                  | Helps avoid host-specific overload while maintaining throughput; aligns with HTTP/1.x best practices.               |
+| `maxConnTotal`               | 200           | Max connections across all routes                            | Supports high concurrency and parallelism; ideal for services with multiple endpoints or multitenant APIs.          |
+| `rcvBufSize / sndBufSize`    | 8 KB          | Receive/send buffer size at the socket level                 | 8 KB aligns with standard MTU and is large enough for headers and small payloads without over-allocating memory.    |
+| `socketTimeout` (a.k.a read) | 10 seconds    | Max time to wait for response data after a request           | Helps detect stalled responses; tuned higher than connection timeout to support slow endpoints or large payloads.   |
+| `soLinger`                   | 2 seconds     | Max time to linger in close() before connection force-closes | Allows graceful socket closure; helps flush final ACKs and minimizes half-closed socket issues.                     |
+| `tcpNoDelay`                 | `true`        | Disables Nagle’s algorithm — sends data immediately          | Reduces latency for small messages (e.g. JSON over REST); recommended for most client-side HTTP workloads.          |
+| `timeToLive`                 | 5 minutes     | Max lifetime of a pooled connection regardless of activity   | Ensures stale connections (e.g. DNS changes, proxy idle) are periodically recycled for fresh connectivity.          |
+| `validateAfterInactivity`    | 30 seconds    | Min idle time before validating a connection in the pool     | Prevents using silently closed TCP connections (common issue in long-lived pools or mobile networks).               |
+
