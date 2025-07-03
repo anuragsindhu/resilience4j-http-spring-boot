@@ -453,4 +453,141 @@ class ResilienceIntegrationTest {
 | Rate Limiter       | `withStub(...)` (rapid loop)       | Enforces `limitForPeriod`              |
 | Timeout Handling   | `withNetworkTimeout(...)`          | Fails with socket read timeout         |
 
+------- NEW CHANGES
+
+```yaml
+group:
+  http:
+    clients:
+      default:
+        base-url: http://localhost
+        client-name: default
+
+        http-client:
+          enabled: true
+
+          pool:
+            concurrency-policy: LAX
+            connection:
+              idle-eviction-timeout: 1m
+              time-to-live: 5m
+              validate-after-inactivity: 30s
+            max-connections-per-route: 20
+            max-total-connections: 200
+            socket:
+              linger-timeout: 2s
+              receive-buffer-size: 8192
+              send-buffer-size: 8192
+              socket-timeout: 10s
+              tcp-no-delay: true
+
+          request-factory:
+            connect-timeout: 5s
+            connection-request-timeout: 2s
+            read-timeout: 10s
+
+          ssl:
+            enabled: false
+            hostname-verification-policy: CLIENT
+            hostname-verifier-bean-name:
+            key-store-password:
+            key-store-path:
+            trust-all: false
+            trust-store-password:
+            trust-store-path:
+
+        resilience:
+          circuit-breaker:
+            failure-rate-threshold: 50.0
+            minimum-number-of-calls: 10
+            sliding-window-size: 100
+            wait-duration-in-open-state: 30s
+          circuit-breaker-enabled: false
+          rate-limiter:
+            limit-for-period: 50
+            limit-refresh-period: 1s
+            timeout-duration: 100ms
+          rate-limiter-enabled: false
+          retry:
+            config:
+              exponential-backoff-multiplier: 2.0
+              exponential-max-wait-duration: 8s
+              fail-after-max-attempts: true
+              max-attempts: 5
+              randomized-wait-factor: 0.4
+              retry-exceptions:
+                - org.apache.hc.core5.http.ConnectionRequestTimeoutException
+                - org.apache.hc.core5.http.ConnectTimeoutException
+                - java.net.SocketTimeoutException
+              wait-duration: 500ms
+            retry-status:
+              - TOO_MANY_REQUESTS
+              - BAD_GATEWAY
+              - SERVICE_UNAVAILABLE
+              - GATEWAY_TIMEOUT
+          retry-enabled: false
+```
+
+### Configuration Explanation Table
+
+| Configuration Key | Purpose | Rationale |
+|-------------------|---------|-----------|
+| `group.http.clients.default.base-url` | Base endpoint for the client | Defines where requests should be sent (e.g. REST service root) |
+| `group.http.clients.default.client-name` | Identifier for the client | Used for tagging, metrics, resilience bindings, and logging context |
+
+---
+
+### `http-client` Settings
+
+| Configuration Key | Purpose | Rationale |
+|-------------------|---------|-----------|
+| `group.http.clients.default.http-client.enabled` | Toggles HTTP client usage | Allows disabling transport selectively (useful for testing or fallback logic) |
+| `group.http.clients.default.http-client.pool.concurrency-policy` | Thread/resource management strategy | LAX allows more flexible concurrent usage in scenarios with burst traffic |
+| `group.http.clients.default.http-client.pool.connection.idle-eviction-timeout` | Remove idle connections | Prevents stale pooled sockets from persisting unnecessarily |
+| `group.http.clients.default.http-client.pool.connection.time-to-live` | Max lifetime of a connection | Ensures connections are periodically renewed to avoid stale TCP states |
+| `group.http.clients.default.http-client.pool.connection.validate-after-inactivity` | Validation before reuse | Adds safety checks before reusing long-idle connections |
+| `group.http.clients.default.http-client.pool.max-connections-per-route` | Limits per-target host | Prevents overload on specific upstream endpoints |
+| `group.http.clients.default.http-client.pool.max-total-connections` | Global connection cap | Prevents total resource exhaustion when serving multiple domains |
+| `group.http.clients.default.http-client.pool.socket.linger-timeout` | Delay before socket close | Controls low-level socket behavior; short linger improves shutdown responsiveness |
+| `group.http.clients.default.http-client.pool.socket.receive-buffer-size` | Incoming buffer size | Influences socket performance; large buffer may reduce packet fragmentation |
+| `group.http.clients.default.http-client.pool.socket.send-buffer-size` | Outgoing buffer size | Supports high-throughput uploads or POSTs |
+| `group.http.clients.default.http-client.pool.socket.socket-timeout` | Read timeout | Defines how long to wait for a response before failing |
+| `group.http.clients.default.http-client.pool.socket.tcp-no-delay` | Disable Nagle’s algorithm | Ensures minimal latency for small payloads or chatty APIs |
+| `group.http.clients.default.http-client.request-factory.connect-timeout` | TCP connection timeout | Determines how long to wait when opening a new socket |
+| `group.http.clients.default.http-client.request-factory.connection-request-timeout` | Pool acquisition timeout | Avoids indefinite waits when pooled connections are exhausted |
+| `group.http.clients.default.http-client.request-factory.read-timeout` | Response wait limit | Guards against long-running downstream calls that hang |
+| `group.http.clients.default.http-client.ssl.enabled` | Enables SSL for client | Required for HTTPS requests |
+| `group.http.clients.default.http-client.ssl.hostname-verification-policy` | Host verification level | `CLIENT` verifies via trust store; can be relaxed for dev scenarios |
+| `group.http.clients.default.http-client.ssl.hostname-verifier-bean-name` | Refers to custom verifier bean | Allows pluggable verifier logic (e.g. for pinned certificates or wildcard domains) |
+| `group.http.clients.default.http-client.ssl.key-store-password` | Credential to load client keys | Enables mutual TLS when client certs are required |
+| `group.http.clients.default.http-client.ssl.key-store-path` | Location of client certificate store | Used for authenticating client to server |
+| `group.http.clients.default.http-client.ssl.trust-all` | Disables host and cert validation | Useful in development/testing (not recommended in prod) |
+| `group.http.clients.default.http-client.ssl.trust-store-password` | Credential to load trusted certs | Verifies server certificate chain |
+| `group.http.clients.default.http-client.ssl.trust-store-path` | Location of trusted certificate store | Enables server identity validation |
+
+---
+
+### `resilience` Features
+
+| Configuration Key | Purpose | Rationale |
+|-------------------|---------|-----------|
+| `group.http.clients.default.resilience.circuit-breaker.failure-rate-threshold` | % of failures before opening the breaker | 50% strikes a balance between resiliency and availability |
+| `group.http.clients.default.resilience.circuit-breaker.minimum-number-of-calls` | Minimum sample size | Prevents premature triggering on low traffic |
+| `group.http.clients.default.resilience.circuit-breaker.sliding-window-size` | Size of observation window | Provides enough context to determine healthy/unhealthy states |
+| `group.http.clients.default.resilience.circuit-breaker.wait-duration-in-open-state` | Duration to remain open before retrying | Limits retry load during downstream failures |
+| `group.http.clients.default.resilience.circuit-breaker-enabled` | Enables circuit breaker | Toggle to disable CB behavior when unnecessary |
+| `group.http.clients.default.resilience.rate-limiter.limit-for-period` | Max calls per refresh window | Controls burst rate from client side |
+| `group.http.clients.default.resilience.rate-limiter.limit-refresh-period` | Interval for replenishing permits | Defines time-based fairness window |
+| `group.http.clients.default.resilience.rate-limiter.timeout-duration` | How long to wait for permit | Prevents indefinite blocking under heavy load |
+| `group.http.clients.default.resilience.rate-limiter-enabled` | Enables rate limiter | Toggle to disable RL behavior dynamically |
+| `group.http.clients.default.resilience.retry.config.exponential-backoff-multiplier` | Backoff growth factor | Doubles delay each time—standard resilience practice |
+| `group.http.clients.default.resilience.retry.config.exponential-max-wait-duration` | Max cap for retry delay | Prevents infinite backoff under repeated errors |
+| `group.http.clients.default.resilience.retry.config.fail-after-max-attempts` | Stops after final attempt | Ensures retries don’t continue infinitely |
+| `group.http.clients.default.resilience.retry.config.max-attempts` | Max tries per failed call | 5 attempts is a practical threshold without overloading services |
+| `group.http.clients.default.resilience.retry.config.randomized-wait-factor` | Adds jitter to avoid thundering herd | 40% randomness limits synchronized retries |
+| `group.http.clients.default.resilience.retry.config.retry-exceptions` | Exceptions considered retryable | List includes transient I/O and pool failures (connection-related) |
+| `group.http.clients.default.resilience.retry.config.wait-duration` | Base backoff interval | Starting at 500ms is fast enough to be responsive, not aggressive |
+| `group.http.clients.default.resilience.retry.retry-status` | Retry for HTTP response codes | Covers transient upstream errors (500, 502, 503, 504) |
+| `group.http.clients.default.resilience.retry-enabled` | Enables retry logic | Toggle to opt out when needed |
+
 ---

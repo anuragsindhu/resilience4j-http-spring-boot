@@ -1,13 +1,6 @@
 package com.example.http.autoconfiguration.utils;
 
-import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
-import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
-import static com.github.tomakehurst.wiremock.client.WireMock.get;
-import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
-import static com.github.tomakehurst.wiremock.client.WireMock.ok;
-import static com.github.tomakehurst.wiremock.client.WireMock.post;
-import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
-import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 import static java.util.Map.of;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -17,6 +10,7 @@ import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.ResourceAccessException;
 
@@ -47,9 +41,9 @@ class HttpClientConfigurerIntegrationTest {
 
     @Test
     void shouldFailFastIfConnectTimeoutExceeded() {
-        TestRestClient slowClient = new TestRestClient("http://10.255.255.1"); // unroutable IP
+        TestRestClient unreachableClient = new TestRestClient("http://10.255.255.1"); // unroutable IP
 
-        assertThatThrownBy(() -> slowClient.get("/", String.class))
+        assertThatThrownBy(() -> unreachableClient.get("/", String.class))
                 .isInstanceOf(ResourceAccessException.class)
                 .hasMessageContaining("Connect timed out");
     }
@@ -80,7 +74,7 @@ class HttpClientConfigurerIntegrationTest {
     void shouldSendCustomHeadersInRawRequest() {
         wiremock.stubFor(post("/raw").willReturn(ok("done")));
 
-        client.rawRequest(org.springframework.http.HttpMethod.POST, "/raw", "payload", of("X-Test", "true"))
+        client.rawRequest(HttpMethod.POST, "/raw", "payload", of("X-Test", "true"))
                 .toBodilessEntity();
 
         wiremock.verify(postRequestedFor(urlEqualTo("/raw")).withHeader("X-Test", equalTo("true")));

@@ -1,5 +1,7 @@
 package com.example.http.autoconfiguration.utils;
 
+import com.example.http.autoconfiguration.builder.HttpClientConfigurer;
+import com.example.http.autoconfiguration.properties.HttpClientProperties;
 import java.util.Map;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
@@ -12,7 +14,12 @@ public class TestRestClient {
     private RestClient restClient;
 
     public TestRestClient(String baseUrl) {
-        this.restClient = defaultRestClient(baseUrl);
+        this.restClient =
+                defaultRestClient(baseUrl, HttpClientProperties.builder().build());
+    }
+
+    public TestRestClient(String baseUrl, HttpClientProperties properties) {
+        this.restClient = defaultRestClient(baseUrl, properties);
     }
 
     public TestRestClient(RestClient preconfiguredClient) {
@@ -48,8 +55,8 @@ public class TestRestClient {
                 .retrieve();
     }
 
-    private RestClient defaultRestClient(String baseUrl) {
-        HttpComponentsClientHttpRequestFactory factory = HttpClientConfigurer.configureHttpClient5();
+    private RestClient defaultRestClient(String baseUrl, HttpClientProperties properties) {
+        HttpComponentsClientHttpRequestFactory factory = HttpClientConfigurer.configure(properties);
         return RestClient.builder().requestFactory(factory).baseUrl(baseUrl).build();
     }
 }

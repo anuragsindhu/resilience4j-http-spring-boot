@@ -47,6 +47,7 @@ class RetryIntegrationTest {
         reg.add(
                 "group.http.clients.retry.resilience.retry.retry-exceptions[2]",
                 () -> "org.springframework.web.client.HttpServerErrorException");
+        reg.add("group.http.clients.retry.resilience.retry.retry-status[0]", () -> "INTERNAL_SERVER_ERROR");
         reg.add("group.http.clients.retry.resilience.retry.max-attempts", () -> "3");
         reg.add("group.http.clients.retry.resilience.retry.wait-duration", () -> "PT0.01S");
     }

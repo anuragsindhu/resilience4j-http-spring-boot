@@ -1,17 +1,19 @@
 package com.example.http.autoconfiguration;
 
-import com.example.http.autoconfiguration.builder.CircuitBreakerFactory;
-import com.example.http.autoconfiguration.builder.HttpClientFactory;
-import com.example.http.autoconfiguration.builder.RateLimiterFactory;
+import com.example.http.autoconfiguration.builder.HttpClientConfigurer;
 import com.example.http.autoconfiguration.builder.ResilienceHttpRequestInterceptor;
-import com.example.http.autoconfiguration.builder.RetryFactory;
-import com.example.http.autoconfiguration.logging.ResilienceEventPublisherLogger;
+import com.example.http.autoconfiguration.builder.ResilienceInstanceFactory;
+import com.example.http.autoconfiguration.properties.HttpClientDefaultSettings;
+import com.example.http.autoconfiguration.properties.HttpClientProperties;
+import com.example.http.autoconfiguration.properties.RestClientsProperties;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.ratelimiter.RateLimiter;
 import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
 import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryRegistry;
+import io.github.resilience4j.springboot3.ratelimiter.autoconfigure.RateLimiterProperties;
+import io.github.resilience4j.springboot3.retry.autoconfigure.RetryProperties;
 import io.micrometer.observation.ObservationRegistry;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -28,82 +30,75 @@ import org.springframework.web.client.RestClient;
 
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnClass(RestClient.class)
-@EnableConfigurationProperties(ResilientRestClientProperties.class)
+@EnableConfigurationProperties(RestClientsProperties.class)
 @Slf4j
 public class ResilientRestClientAutoConfiguration {
 
     private final ObservationRegistry observationRegistry;
-    private final ResilientRestClientProperties properties;
-    private final CircuitBreakerRegistry cbRegistry;
+    private final RestClientsProperties clientProperties;
+    private final CircuitBreakerRegistry circuitBreakerRegistry;
     private final RetryRegistry retryRegistry;
-    private final RateLimiterRegistry rlRegistry;
+    private final RateLimiterRegistry rateLimiterRegistry;
 
     public ResilientRestClientAutoConfiguration(
             ObservationRegistry observationRegistry,
-            ResilientRestClientProperties properties,
-            CircuitBreakerRegistry cbRegistry,
+            RestClientsProperties clientProperties,
+            CircuitBreakerRegistry circuitBreakerRegistry,
             RetryRegistry retryRegistry,
-            RateLimiterRegistry rlRegistry) {
+            RateLimiterRegistry rateLimiterRegistry,
+            RetryProperties retryProperties,
+            RateLimiterProperties rateLimiterProperties) {
+
         this.observationRegistry = observationRegistry;
-        this.properties = properties;
-        this.cbRegistry = cbRegistry;
+        this.clientProperties = clientProperties;
+        this.circuitBreakerRegistry = circuitBreakerRegistry;
         this.retryRegistry = retryRegistry;
-        this.rlRegistry = rlRegistry;
+        this.rateLimiterRegistry = rateLimiterRegistry;
     }
 
     @Bean
     @ConditionalOnMissingBean(name = "resilientRestClients")
     public Map<String, RestClient> resilientRestClients() {
         Map<String, RestClient> clients = new LinkedHashMap<>();
-        for (Map.Entry<String, ResilientRestClientProperties.Client> entry :
-                properties.getClients().entrySet()) {
 
-            String name = entry.getKey();
-            ResilientRestClientProperties.Client cfg = entry.getValue();
+        clientProperties.getClients().forEach((name, props) -> {
+            HttpClientProperties httpProps = props.getHttpClient() != null
+                    ? props.getHttpClient()
+                    : HttpClientDefaultSettings.defaultHttpClient();
 
-            // 1) HTTP factory (Apache HttpClient with timeouts)
-            var factory = HttpClientFactory.createFactory(cfg);
+            var factory = HttpClientConfigurer.configure(httpProps);
 
-            // 2) Resilience4j components
-            var resilience = cfg.getResilience();
-            CircuitBreaker cb = resilience.isCircuitBreakerEnabled()
-                    ? CircuitBreakerFactory.create(name, cbRegistry, resilience.getCircuitBreaker())
-                    : null;
+            CircuitBreaker circuitBreaker =
+                    ResilienceInstanceFactory.getCircuitBreaker(name, circuitBreakerRegistry, props.getResilience());
 
-            Retry retry = null;
-            Set<HttpStatus> statusSet = Collections.emptySet();
-            if (resilience.isRetryEnabled()) {
-                // build the Retry from the nested config
-                retry = RetryFactory.create(name, retryRegistry, resilience.getRetry());
-                // grab the custom statuses
-                statusSet = resilience.getRetry().getRetryStatus();
-            }
+            Retry retry = ResilienceInstanceFactory.getRetry(name, retryRegistry, props.getResilience());
 
-            RateLimiter rl = resilience.isRateLimiterEnabled()
-                    ? RateLimiterFactory.create(name, rlRegistry, resilience.getRateLimiter())
-                    : null;
+            RateLimiter rateLimiter =
+                    ResilienceInstanceFactory.getRateLimiter(name, rateLimiterRegistry, props.getResilience());
 
-            ResilienceEventPublisherLogger.attach(retry, cb, rl, log);
+            Set<HttpStatus> retryStatusSet = props.getResilience().isRetryEnabled()
+                    ? props.getResilience().getRetry().getRetryStatus()
+                    : Collections.emptySet();
 
-            // 3) Build the RestClient, registering our ClientHttpRequestInterceptor
-            ResilienceHttpRequestInterceptor resilienceInterceptor = ResilienceHttpRequestInterceptor.builder(
-                            observationRegistry)
-                    .circuitBreaker(cb)
+            var interceptor = ResilienceHttpRequestInterceptor.builder(observationRegistry)
                     .clientName(name)
-                    .observationTags(cfg.getObservationTags())
-                    .rateLimiter(rl)
+                    .observationTags(props.getObservationTags())
+                    .circuitBreaker(circuitBreaker)
                     .retry(retry)
-                    .retryStatus(statusSet)
+                    .retryStatus(retryStatusSet)
+                    .rateLimiter(rateLimiter)
                     .build();
 
             RestClient client = RestClient.builder()
-                    .baseUrl(cfg.getBaseUrl())
+                    .baseUrl(props.getBaseUrl())
                     .requestFactory(factory)
-                    .requestInterceptor(resilienceInterceptor)
+                    .requestInterceptor(interceptor)
                     .build();
 
             clients.put(name, client);
-        }
+            log.debug("Configured resilient RestClient for '{}'", name);
+        });
+
         return clients;
     }
 }

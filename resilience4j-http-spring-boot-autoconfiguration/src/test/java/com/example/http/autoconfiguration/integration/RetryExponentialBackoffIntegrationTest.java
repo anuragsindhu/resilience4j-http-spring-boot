@@ -37,6 +37,10 @@ class RetryExponentialBackoffIntegrationTest {
     static void registerProperties(DynamicPropertyRegistry reg) {
         String base = wm.getRuntimeInfo().getHttpBaseUrl();
 
+        // Common retry status for all clients
+        String retryStatusKey = "resilience.retry.retry-status[0]";
+        String retryStatusValue = "INTERNAL_SERVER_ERROR";
+
         // 1. Exponential + jitter + max wait
         reg.add("group.http.clients.exp-jitter-max.base-url", () -> base);
         reg.add("group.http.clients.exp-jitter-max.resilience.retry-enabled", () -> "true");
@@ -44,7 +48,7 @@ class RetryExponentialBackoffIntegrationTest {
         reg.add("group.http.clients.exp-jitter-max.resilience.retry.wait-duration", () -> "100ms");
         reg.add("group.http.clients.exp-jitter-max.resilience.retry.exponential-backoff-multiplier", () -> "2.0");
         reg.add("group.http.clients.exp-jitter-max.resilience.retry.randomized-wait-factor", () -> "0.25");
-        reg.add("group.http.clients.exp-jitter-max.resilience.retry.exponential-max-wait-duration", () -> "1s");
+        reg.add("group.http.clients.exp-jitter-max." + retryStatusKey, () -> retryStatusValue);
 
         // 2. Exponential + jitter (no max wait)
         reg.add("group.http.clients.exp-jitter.base-url", () -> base);
@@ -53,6 +57,7 @@ class RetryExponentialBackoffIntegrationTest {
         reg.add("group.http.clients.exp-jitter.resilience.retry.wait-duration", () -> "100ms");
         reg.add("group.http.clients.exp-jitter.resilience.retry.exponential-backoff-multiplier", () -> "2.0");
         reg.add("group.http.clients.exp-jitter.resilience.retry.randomized-wait-factor", () -> "0.5");
+        reg.add("group.http.clients.exp-jitter." + retryStatusKey, () -> retryStatusValue);
 
         // 3. Jittered fixed interval only
         reg.add("group.http.clients.jitter-only.base-url", () -> base);
@@ -60,6 +65,7 @@ class RetryExponentialBackoffIntegrationTest {
         reg.add("group.http.clients.jitter-only.resilience.retry.max-attempts", () -> "4");
         reg.add("group.http.clients.jitter-only.resilience.retry.wait-duration", () -> "300ms");
         reg.add("group.http.clients.jitter-only.resilience.retry.randomized-wait-factor", () -> "0.3");
+        reg.add("group.http.clients.jitter-only." + retryStatusKey, () -> retryStatusValue);
     }
 
     @BeforeEach

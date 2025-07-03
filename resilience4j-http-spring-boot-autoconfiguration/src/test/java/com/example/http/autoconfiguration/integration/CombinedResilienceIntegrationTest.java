@@ -47,6 +47,7 @@ class CombinedResilienceIntegrationTest {
         reg.add("group.http.clients.combined-resil.resilience.retry-enabled", () -> "true");
         reg.add("group.http.clients.combined-resil.resilience.retry.max-attempts", () -> "3");
         reg.add("group.http.clients.combined-resil.resilience.retry.wait-duration", () -> "PT0S");
+        reg.add("group.http.clients.combined-resil.resilience.retry.retry-status[0]", () -> "INTERNAL_SERVER_ERROR");
     }
 
     @Autowired

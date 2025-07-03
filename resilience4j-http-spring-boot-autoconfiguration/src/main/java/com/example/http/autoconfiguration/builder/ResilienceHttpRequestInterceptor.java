@@ -1,12 +1,17 @@
 package com.example.http.autoconfiguration.builder;
 
+import com.example.http.autoconfiguration.logging.ResilienceEventPublisherLogger;
 import com.example.http.autoconfiguration.observation.ResilienceObservationTagContributor;
+import com.example.http.autoconfiguration.properties.RestClientProperties;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.core.functions.CheckedSupplier;
 import io.github.resilience4j.ratelimiter.RateLimiter;
+import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
 import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import io.github.resilience4j.retry.Retry;
+import io.github.resilience4j.retry.RetryRegistry;
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationRegistry;
 import java.io.IOException;
@@ -14,6 +19,7 @@ import java.io.UncheckedIOException;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -24,6 +30,7 @@ import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClientException;
 
+@Slf4j
 public class ResilienceHttpRequestInterceptor implements ClientHttpRequestInterceptor {
 
     private final ObservationRegistry registry;
@@ -37,11 +44,15 @@ public class ResilienceHttpRequestInterceptor implements ClientHttpRequestInterc
     private ResilienceHttpRequestInterceptor(Builder builder) {
         this.registry = builder.registry;
         this.clientName = builder.clientName;
-        this.circuitBreaker = builder.circuitBreaker;
         this.observationTags = builder.observationTags;
+        this.circuitBreaker = builder.circuitBreaker;
         this.retry = builder.retry;
         this.rateLimiter = builder.rateLimiter;
         this.retryStatus = builder.retryStatus;
+    }
+
+    public static Builder builder(ObservationRegistry registry) {
+        return new Builder(registry != null ? registry : ObservationRegistry.NOOP);
     }
 
     @Override
@@ -56,7 +67,6 @@ public class ResilienceHttpRequestInterceptor implements ClientHttpRequestInterc
                 .lowCardinalityKeyValue("http.method", request.getMethod().name())
                 .lowCardinalityKeyValue("http.uri", request.getURI().getPath())
                 .observeChecked(() -> {
-                    // Build the supplier that may throw to trigger retry
                     CheckedSupplier<ClientHttpResponse> supplier = () -> {
                         ClientHttpResponse rsp = execution.execute(request, body);
                         HttpStatusCode code = rsp.getStatusCode();
@@ -109,20 +119,53 @@ public class ResilienceHttpRequestInterceptor implements ClientHttpRequestInterc
                 }));
     }
 
-    public static Builder builder(ObservationRegistry registry) {
-        return new Builder(Objects.requireNonNull(registry, "ObservationRegistry must not be null"));
+    public static ResilienceHttpRequestInterceptor createFromConfig(
+            CircuitBreakerRegistry circuitBreakerRegistry,
+            RateLimiterRegistry rlRegistry,
+            RetryRegistry retryRegistry,
+            RestClientProperties.Resilience resilience,
+            String clientName,
+            Map<String, String> observationTags,
+            ObservationRegistry registry) {
+
+        if (resilience == null
+                || !(resilience.isRetryEnabled()
+                        || resilience.isCircuitBreakerEnabled()
+                        || resilience.isRateLimiterEnabled())) {
+            return null;
+        }
+
+        Builder builder = new Builder(registry != null ? registry : ObservationRegistry.NOOP)
+                .clientName(Objects.requireNonNull(clientName, "clientName is required"))
+                .observationTags(observationTags);
+
+        if (resilience.isRetryEnabled()) {
+            builder.retry(ResilienceInstanceFactory.getRetry(clientName, retryRegistry, resilience))
+                    .retryStatus(resilience.getRetry().getRetryStatus());
+        }
+
+        if (resilience.isCircuitBreakerEnabled()) {
+            builder.circuitBreaker(
+                    ResilienceInstanceFactory.getCircuitBreaker(clientName, circuitBreakerRegistry, resilience));
+        }
+
+        if (resilience.isRateLimiterEnabled()) {
+            builder.rateLimiter(ResilienceInstanceFactory.getRateLimiter(clientName, rlRegistry, resilience));
+        }
+
+        return builder.build();
     }
 
     public static class Builder {
         private final ObservationRegistry registry;
-        private Map<String, String> observationTags;
         private String clientName;
+        private Map<String, String> observationTags;
         private CircuitBreaker circuitBreaker;
         private Retry retry;
         private RateLimiter rateLimiter;
         private Set<HttpStatus> retryStatus;
 
-        private Builder(ObservationRegistry registry) {
+        public Builder(ObservationRegistry registry) {
             this.registry = registry;
         }
 
@@ -146,19 +189,20 @@ public class ResilienceHttpRequestInterceptor implements ClientHttpRequestInterc
             return this;
         }
 
-        public Builder rateLimiter(RateLimiter rl) {
-            this.rateLimiter = rl;
-            return this;
-        }
-
         public Builder retryStatus(Set<HttpStatus> statuses) {
             this.retryStatus = statuses;
             return this;
         }
 
+        public Builder rateLimiter(RateLimiter rl) {
+            this.rateLimiter = rl;
+            return this;
+        }
+
         public ResilienceHttpRequestInterceptor build() {
-            Objects.requireNonNull(clientName, "clientName is required");
-            return new ResilienceHttpRequestInterceptor(this);
+            ResilienceHttpRequestInterceptor interceptor = new ResilienceHttpRequestInterceptor(this);
+            ResilienceEventPublisherLogger.attach(retry, circuitBreaker, rateLimiter, log);
+            return interceptor;
         }
     }
 }
