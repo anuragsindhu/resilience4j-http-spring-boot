@@ -27,7 +27,7 @@ public class HttpClientProperties {
     private Ssl ssl = HttpClientDefaultSettings.defaultSsl();
 
     public static HttpClientProperties defaultConfig() {
-        return HttpClientDefaultSettings.defaultHttpClient();
+        return HttpClientProperties.builder().build();
     }
 
     @Data
@@ -45,10 +45,10 @@ public class HttpClientProperties {
         private int maxTotalConnections = 200;
 
         @Builder.Default
-        private Connection connection = Connection.builder().build();
+        private Connection connection = HttpClientDefaultSettings.defaultConnection();
 
         @Builder.Default
-        private Socket socket = Socket.builder().build();
+        private Socket socket = HttpClientDefaultSettings.defaultSocket();
 
         @Data
         @Builder

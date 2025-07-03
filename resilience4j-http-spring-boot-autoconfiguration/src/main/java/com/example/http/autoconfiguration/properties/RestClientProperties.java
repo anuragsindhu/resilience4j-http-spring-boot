@@ -30,7 +30,7 @@ public class RestClientProperties {
 
     @Builder.Default
     @NestedConfigurationProperty
-    private HttpClientProperties httpClient = HttpClientProperties.defaultConfig();
+    private HttpClientProperties httpClient = HttpClientProperties.builder().build();
 
     @Builder.Default
     private Map<String, String> observationTags = new HashMap<>();
@@ -39,7 +39,11 @@ public class RestClientProperties {
     @NestedConfigurationProperty
     private Resilience resilience = RestClientDefaultSettings.defaultResilience();
 
-    // Nested: Resilience Configuration
+    /** Factory for the builder’s defaults. */
+    public static RestClientProperties defaultConfig() {
+        return RestClientProperties.builder().build();
+    }
+
     @Data
     @Builder
     @NoArgsConstructor
