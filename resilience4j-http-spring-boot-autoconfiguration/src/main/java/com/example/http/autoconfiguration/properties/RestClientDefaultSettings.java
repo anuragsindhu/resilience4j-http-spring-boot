@@ -54,6 +54,14 @@ public final class RestClientDefaultSettings {
         return props;
     }
 
+    public RestClientProperties.RequestFactory defaultRequestFactory() {
+        return RestClientProperties.RequestFactory.builder()
+                .connectTimeout(Duration.ofSeconds(5))
+                .connectionRequestTimeout(Duration.ofSeconds(2))
+                .readTimeout(Duration.ofSeconds(10))
+                .build();
+    }
+
     public RestClientProperties.RetryWrapper defaultRetryWrapper() {
         var retry = new RestClientProperties.RetryWrapper();
         retry.setExponentialBackoffMultiplier(2.0);

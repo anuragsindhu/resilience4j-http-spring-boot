@@ -20,7 +20,6 @@ import org.springframework.test.context.TestPropertySource;
             // Fully override beta
             "group.http.clients.beta.base-url=https://beta.example.com",
             "group.http.clients.beta.client-name=beta-client",
-            "group.http.clients.beta.http-client.enabled=false",
             "group.http.clients.beta.http-client.pool.concurrency-policy=STRICT",
             "group.http.clients.beta.observation-tags.region=us-west",
             "group.http.clients.beta.resilience.circuit-breaker-enabled=true",
@@ -74,7 +73,6 @@ class RestClientsPropertiesIntegrationTest {
         assertThat(beta.getBaseUrl()).isEqualTo("https://beta.example.com");
         assertThat(beta.getClientName()).isEqualTo("beta-client");
 
-        assertThat(beta.getHttpClient().isEnabled()).isFalse();
         assertThat(beta.getHttpClient().getPool().getConcurrencyPolicy()).isEqualTo("STRICT");
 
         assertThat(beta.getObservationTags()).hasSize(1).containsEntry("region", "us-west");

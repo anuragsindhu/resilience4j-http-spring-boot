@@ -1,8 +1,10 @@
 package com.example.http.autoconfiguration.properties;
 
+import com.example.http.client.property.HttpClientProperties;
 import io.github.resilience4j.common.retry.configuration.CommonRetryConfigurationProperties;
 import io.github.resilience4j.springboot3.circuitbreaker.autoconfigure.CircuitBreakerProperties;
 import io.github.resilience4j.springboot3.ratelimiter.autoconfigure.RateLimiterProperties;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -20,6 +22,9 @@ import org.springframework.http.HttpStatus;
 @AllArgsConstructor
 public class RestClientProperties {
 
+    @Builder.Default
+    private boolean enabled = true;
+
     private String baseUrl;
 
     @Builder.Default
@@ -35,6 +40,9 @@ public class RestClientProperties {
     @Builder.Default
     @NestedConfigurationProperty
     private Resilience resilience = RestClientDefaultSettings.defaultResilience();
+
+    @Builder.Default
+    private RequestFactory requestFactory = RestClientDefaultSettings.defaultRequestFactory();
 
     /** Factory for the builder’s defaults. */
     public static RestClientProperties defaultConfig() {
@@ -66,6 +74,22 @@ public class RestClientProperties {
         @Builder.Default
         private RateLimiterProperties.InstanceProperties rateLimiter =
                 RestClientDefaultSettings.defaultRateLimiterProperties();
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class RequestFactory {
+
+        @Builder.Default
+        private Duration connectTimeout = Duration.ofSeconds(5);
+
+        @Builder.Default
+        private Duration connectionRequestTimeout = Duration.ofSeconds(2);
+
+        @Builder.Default
+        private Duration readTimeout = Duration.ofSeconds(10);
     }
 
     @Data

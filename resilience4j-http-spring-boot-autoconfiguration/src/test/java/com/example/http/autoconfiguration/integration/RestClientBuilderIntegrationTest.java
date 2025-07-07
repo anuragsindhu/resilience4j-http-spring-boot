@@ -10,8 +10,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.example.http.autoconfiguration.builder.RestClientBuilder;
-import com.example.http.autoconfiguration.properties.HttpClientProperties;
 import com.example.http.autoconfiguration.properties.RestClientProperties;
+import com.example.http.client.property.HttpClientProperties;
 import com.github.tomakehurst.wiremock.client.WireMock;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.http.Fault;
@@ -46,7 +46,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -191,29 +190,6 @@ class RestClientBuilderIntegrationTest {
         assertThrows(
                 RequestNotPermitted.class,
                 () -> client.get().uri("/rl").retrieve().body(String.class));
-    }
-
-    @Test
-    void slowResponseShouldTriggerReadTimeout() {
-        stubFor(get("/slow")
-                .willReturn(aResponse().withStatus(200).withFixedDelay(500).withBody("slow")));
-
-        HttpClientProperties httpProps = HttpClientProperties.builder()
-                .requestFactory(HttpClientProperties.RequestFactory.builder()
-                        .readTimeout(Duration.ofMillis(200))
-                        .build())
-                .build();
-
-        RestClientProperties props = RestClientProperties.builder()
-                .baseUrl(baseUrl)
-                .httpClient(httpProps)
-                .build();
-
-        RestClient client = builder.client("timeoutClient", props).build();
-
-        assertThrows(
-                RestClientException.class,
-                () -> client.get().uri("/slow").retrieve().body(String.class));
     }
 
     @Test

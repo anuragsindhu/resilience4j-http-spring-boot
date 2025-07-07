@@ -2,9 +2,7 @@ package com.example.http.autoconfiguration.builder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.example.http.autoconfiguration.properties.HttpClientProperties;
 import com.example.http.autoconfiguration.properties.RestClientProperties;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
@@ -69,18 +67,6 @@ class RestClientBuilderTest {
 
         assertThatNoException()
                 .isThrownBy(() -> builder.client("nullProps", props).build());
-    }
-
-    @Test
-    void buildThrowsWhenHttpClientDisabled() {
-        HttpClientProperties disabledHttp =
-                HttpClientProperties.builder().enabled(false).build();
-        RestClientProperties props =
-                RestClientProperties.builder().httpClient(disabledHttp).build();
-
-        assertThatThrownBy(() -> builder.client("disabled", props).build())
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("HttpClient configuration is disabled.");
     }
 
     @Test

@@ -1,6 +1,6 @@
-package com.example.http.autoconfiguration.validation;
+package com.example.http.client.validation;
 
-import com.example.http.autoconfiguration.properties.HttpClientProperties;
+import com.example.http.client.property.HttpClientProperties;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import java.util.Set;

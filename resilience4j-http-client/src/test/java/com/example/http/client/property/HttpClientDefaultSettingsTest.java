@@ -1,4 +1,4 @@
-package com.example.http.autoconfiguration.properties;
+package com.example.http.client.property;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

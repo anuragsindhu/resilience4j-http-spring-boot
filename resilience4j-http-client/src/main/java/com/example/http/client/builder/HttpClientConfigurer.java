@@ -1,6 +1,6 @@
-package com.example.http.autoconfiguration.builder;
+package com.example.http.client.builder;
 
-import com.example.http.autoconfiguration.properties.HttpClientProperties;
+import com.example.http.client.property.HttpClientProperties;
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
@@ -15,16 +15,11 @@ import org.apache.hc.core5.http.io.SocketConfig;
 import org.apache.hc.core5.pool.PoolConcurrencyPolicy;
 import org.apache.hc.core5.util.TimeValue;
 import org.apache.hc.core5.util.Timeout;
-import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 
 @UtilityClass
 public final class HttpClientConfigurer {
 
-    public HttpComponentsClientHttpRequestFactory configure(HttpClientProperties props) {
-        if (!props.isEnabled()) {
-            throw new IllegalStateException("HttpClient configuration is disabled.");
-        }
-
+    public HttpClient configure(HttpClientProperties props) {
         HostnameVerifier verifier = props.getSsl().getHostnameVerifier();
         if (verifier == null) {
             verifier = props.getSsl().isTrustAll()
@@ -71,18 +66,10 @@ public final class HttpClientConfigurer {
             poolBuilder.setTlsSocketStrategy(tlsStrategy);
         }
 
-        HttpClient client = HttpClientBuilder.create()
+        return HttpClientBuilder.create()
                 .disableAutomaticRetries()
                 .setConnectionManager(poolBuilder.build())
                 .evictIdleConnections(TimeValue.of(conn.getIdleEvictionTimeout()))
                 .build();
-
-        HttpClientProperties.RequestFactory rf = props.getRequestFactory();
-        HttpComponentsClientHttpRequestFactory factory = new HttpComponentsClientHttpRequestFactory(client);
-        factory.setConnectionRequestTimeout(rf.getConnectionRequestTimeout());
-        factory.setConnectTimeout(rf.getConnectTimeout());
-        factory.setReadTimeout(rf.getReadTimeout());
-
-        return factory;
     }
 }

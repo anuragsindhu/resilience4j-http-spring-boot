@@ -1,13 +1,13 @@
-package com.example.http.autoconfiguration.builder;
+package com.example.http.client.builder;
 
-import com.example.http.autoconfiguration.properties.HttpClientProperties;
-import com.example.http.autoconfiguration.validation.SslValidator;
+import com.example.http.client.property.HttpClientProperties;
+import com.example.http.client.validation.SslValidator;
 import jakarta.validation.Validator;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.security.KeyStore;
 import java.util.Objects;
-import javax.net.ssl.*;
+import javax.net.ssl.SSLContext;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hc.client5.http.ssl.TrustAllStrategy;
 import org.apache.hc.core5.ssl.SSLContexts;

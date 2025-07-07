@@ -1,8 +1,11 @@
-package com.example.http.autoconfiguration.properties;
+package com.example.http.client.property;
 
-import com.example.http.autoconfiguration.validation.MinDuration;
-import com.example.http.autoconfiguration.validation.SslStoreGroup;
-import jakarta.validation.constraints.*;
+import com.example.http.client.validation.MinDuration;
+import com.example.http.client.validation.SslStoreGroup;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.time.Duration;
 import javax.net.ssl.HostnameVerifier;
 import lombok.AllArgsConstructor;
@@ -16,9 +19,6 @@ import org.apache.hc.client5.http.ssl.HostnameVerificationPolicy;
 @NoArgsConstructor
 @AllArgsConstructor
 public class HttpClientProperties {
-
-    @Builder.Default
-    private boolean enabled = true;
 
     @NotNull @Builder.Default
     private Pool pool = HttpClientDefaultSettings.defaultPool();

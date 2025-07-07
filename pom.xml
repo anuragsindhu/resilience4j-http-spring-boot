@@ -17,6 +17,7 @@
     <modules>
         <module>resilience4j-http-spring-boot-autoconfiguration</module>
         <module>resilience4j-http-spring-boot-starter</module>
+        <module>resilience4j-http-client</module>
     </modules>
     <scm>
         <connection />
@@ -25,6 +26,7 @@
         <url />
     </scm>
     <properties>
+        <expressly.version>6.0.0</expressly.version>
         <logstash-logback-encoder.version>8.1</logstash-logback-encoder.version>
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
@@ -47,6 +49,11 @@
                 <artifactId>logstash-logback-encoder</artifactId>
                 <version>${logstash-logback-encoder.version}</version>
                 <scope>runtime</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.glassfish.expressly</groupId>
+                <artifactId>expressly</artifactId>
+                <version>${expressly.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.springframework.cloud</groupId>

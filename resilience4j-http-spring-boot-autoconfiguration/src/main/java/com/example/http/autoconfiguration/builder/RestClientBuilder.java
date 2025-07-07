@@ -1,9 +1,10 @@
 package com.example.http.autoconfiguration.builder;
 
-import com.example.http.autoconfiguration.properties.HttpClientDefaultSettings;
-import com.example.http.autoconfiguration.properties.HttpClientProperties;
 import com.example.http.autoconfiguration.properties.RestClientDefaultSettings;
 import com.example.http.autoconfiguration.properties.RestClientProperties;
+import com.example.http.client.builder.HttpClientConfigurer;
+import com.example.http.client.property.HttpClientDefaultSettings;
+import com.example.http.client.property.HttpClientProperties;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.ratelimiter.RateLimiter;
@@ -14,6 +15,7 @@ import io.micrometer.observation.ObservationRegistry;
 import java.util.Collections;
 import java.util.Set;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 public class RestClientBuilder {
@@ -101,7 +103,11 @@ public class RestClientBuilder {
                     : HttpClientDefaultSettings.defaultHttpClient();
 
             // 2) Build underlying request‐factory
-            var factory = HttpClientConfigurer.configure(httpProps);
+            var httpClient = HttpClientConfigurer.configure(httpProps);
+            var factory = new HttpComponentsClientHttpRequestFactory(httpClient);
+            factory.setConnectTimeout(props.getRequestFactory().getConnectTimeout());
+            factory.setConnectionRequestTimeout(props.getRequestFactory().getConnectionRequestTimeout());
+            factory.setReadTimeout(props.getRequestFactory().getReadTimeout());
 
             // 3) Obtain resilience configuration
             var resilienceConfig = props.getResilience() != null

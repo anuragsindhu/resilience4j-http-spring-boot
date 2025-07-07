@@ -1,7 +1,7 @@
 package com.example.http.autoconfiguration.utils;
 
-import com.example.http.autoconfiguration.builder.HttpClientConfigurer;
-import com.example.http.autoconfiguration.properties.HttpClientProperties;
+import com.example.http.autoconfiguration.properties.RestClientProperties;
+import com.example.http.client.builder.HttpClientConfigurer;
 import java.util.Map;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
@@ -15,10 +15,10 @@ public class TestRestClient {
 
     public TestRestClient(String baseUrl) {
         this.restClient =
-                defaultRestClient(baseUrl, HttpClientProperties.builder().build());
+                defaultRestClient(baseUrl, RestClientProperties.builder().build());
     }
 
-    public TestRestClient(String baseUrl, HttpClientProperties properties) {
+    public TestRestClient(String baseUrl, RestClientProperties properties) {
         this.restClient = defaultRestClient(baseUrl, properties);
     }
 
@@ -55,8 +55,12 @@ public class TestRestClient {
                 .retrieve();
     }
 
-    private RestClient defaultRestClient(String baseUrl, HttpClientProperties properties) {
-        HttpComponentsClientHttpRequestFactory factory = HttpClientConfigurer.configure(properties);
+    private RestClient defaultRestClient(String baseUrl, RestClientProperties properties) {
+        var httpClient = HttpClientConfigurer.configure(properties.getHttpClient());
+        var factory = new HttpComponentsClientHttpRequestFactory(httpClient);
+        factory.setConnectTimeout(properties.getRequestFactory().getConnectTimeout());
+        factory.setConnectionRequestTimeout(properties.getRequestFactory().getConnectionRequestTimeout());
+        factory.setReadTimeout(properties.getRequestFactory().getReadTimeout());
         return RestClient.builder().requestFactory(factory).baseUrl(baseUrl).build();
     }
 }

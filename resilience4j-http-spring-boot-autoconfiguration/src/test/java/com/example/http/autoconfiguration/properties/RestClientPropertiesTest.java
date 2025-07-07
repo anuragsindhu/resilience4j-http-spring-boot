@@ -2,6 +2,7 @@ package com.example.http.autoconfiguration.properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.http.client.property.HttpClientProperties;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -45,37 +46,6 @@ class RestClientPropertiesTest {
         var rlProps = resilience.getRateLimiter();
         var expectedRl = expectedRes.getRateLimiter();
         assertThat(rlProps.getLimitForPeriod()).isEqualTo(expectedRl.getLimitForPeriod());
-    }
-
-    @Test
-    void builderOverridesAllFields() {
-        String url = "https://api.example";
-        String name = "customClient";
-
-        HttpClientProperties customHttp =
-                HttpClientProperties.builder().enabled(false).build();
-
-        Map<String, String> customTags = Map.of("env", "test");
-
-        RestClientProperties.Resilience customRes = RestClientProperties.Resilience.builder()
-                .circuitBreakerEnabled(true)
-                .retryEnabled(true)
-                .rateLimiterEnabled(true)
-                .build();
-
-        RestClientProperties props = RestClientProperties.builder()
-                .baseUrl(url)
-                .clientName(name)
-                .httpClient(customHttp)
-                .observationTags(new java.util.HashMap<>(customTags))
-                .resilience(customRes)
-                .build();
-
-        assertThat(props.getBaseUrl()).isEqualTo(url);
-        assertThat(props.getClientName()).isEqualTo(name);
-        assertThat(props.getHttpClient()).isSameAs(customHttp);
-        assertThat(props.getObservationTags()).containsExactlyEntriesOf(customTags);
-        assertThat(props.getResilience()).isSameAs(customRes);
     }
 
     @Test

@@ -1,4 +1,4 @@
-package com.example.http.autoconfiguration.properties;
+package com.example.http.client.property;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -141,13 +141,11 @@ class HttpClientPropertiesTest {
                 .build();
 
         HttpClientProperties props = HttpClientProperties.builder()
-                .enabled(false)
                 .pool(customPool)
                 .requestFactory(customRf)
                 .ssl(customSsl)
                 .build();
 
-        assertThat(props.isEnabled()).isFalse();
         assertThat(props.getPool()).isSameAs(customPool);
         assertThat(props.getRequestFactory()).isSameAs(customRf);
         assertThat(props.getSsl()).isSameAs(customSsl);

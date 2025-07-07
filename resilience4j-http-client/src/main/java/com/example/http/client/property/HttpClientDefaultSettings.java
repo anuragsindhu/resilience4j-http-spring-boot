@@ -1,4 +1,4 @@
-package com.example.http.autoconfiguration.properties;
+package com.example.http.client.property;
 
 import java.time.Duration;
 import org.apache.hc.client5.http.ssl.HostnameVerificationPolicy;
@@ -9,7 +9,6 @@ public final class HttpClientDefaultSettings {
 
     public static HttpClientProperties defaultHttpClient() {
         return HttpClientProperties.builder()
-                .enabled(true)
                 .pool(defaultPool())
                 .requestFactory(defaultRequestFactory())
                 .ssl(defaultSsl())

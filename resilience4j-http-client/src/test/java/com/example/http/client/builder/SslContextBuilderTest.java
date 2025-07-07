@@ -1,10 +1,10 @@
-package com.example.http.autoconfiguration.builder;
+package com.example.http.client.builder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.example.http.autoconfiguration.properties.HttpClientProperties.Ssl;
-import com.example.http.autoconfiguration.properties.HttpClientProperties.Store;
+import com.example.http.client.property.HttpClientProperties;
+import com.example.http.client.property.HttpClientProperties.Store;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import java.io.File;
@@ -21,14 +21,16 @@ class SslContextBuilderTest {
 
     @Test
     void shouldReturnNullIfSslIsDisabled() {
-        Ssl ssl = Ssl.builder().enabled(false).build();
+        HttpClientProperties.Ssl ssl =
+                HttpClientProperties.Ssl.builder().enabled(false).build();
         SSLContext result = SslContextBuilder.from(ssl).build();
         assertThat(result).isNull();
     }
 
     @Test
     void shouldTrustAllWhenConfigured() {
-        Ssl ssl = Ssl.builder().enabled(true).trustAll(true).build();
+        HttpClientProperties.Ssl ssl =
+                HttpClientProperties.Ssl.builder().enabled(true).trustAll(true).build();
         SSLContext result = SslContextBuilder.from(ssl).build();
         assertThat(result).isNotNull();
     }
@@ -38,7 +40,10 @@ class SslContextBuilderTest {
         Store partial =
                 Store.builder().location("classpath:x.p12").type("PKCS12").build();
 
-        Ssl ssl = Ssl.builder().enabled(true).truststore(partial).build();
+        HttpClientProperties.Ssl ssl = HttpClientProperties.Ssl.builder()
+                .enabled(true)
+                .truststore(partial)
+                .build();
         SSLContext result = SslContextBuilder.from(ssl).build();
         assertThat(result).isNotNull(); // validation skipped
     }
@@ -46,7 +51,10 @@ class SslContextBuilderTest {
     @Test
     void shouldValidateStoresIfValidatorIsPresent() {
         Store broken = Store.builder().location("classpath:x.jks").build();
-        Ssl ssl = Ssl.builder().enabled(true).truststore(broken).build();
+        HttpClientProperties.Ssl ssl = HttpClientProperties.Ssl.builder()
+                .enabled(true)
+                .truststore(broken)
+                .build();
 
         assertThatThrownBy(() -> SslContextBuilder.from(ssl, validator).build())
                 .isInstanceOf(IllegalArgumentException.class)
@@ -55,14 +63,18 @@ class SslContextBuilderTest {
 
     @Test
     void shouldIgnoreKeystoreIfNull() {
-        Ssl ssl = Ssl.builder().enabled(true).keystore(null).build();
+        HttpClientProperties.Ssl ssl =
+                HttpClientProperties.Ssl.builder().enabled(true).keystore(null).build();
         SSLContext result = SslContextBuilder.from(ssl).build();
         assertThat(result).isNotNull();
     }
 
     @Test
     void shouldIgnoreTruststoreIfNull() {
-        Ssl ssl = Ssl.builder().enabled(true).truststore(null).build();
+        HttpClientProperties.Ssl ssl = HttpClientProperties.Ssl.builder()
+                .enabled(true)
+                .truststore(null)
+                .build();
         SSLContext result = SslContextBuilder.from(ssl).build();
         assertThat(result).isNotNull();
     }
@@ -75,7 +87,10 @@ class SslContextBuilderTest {
                 .type("JKS")
                 .build();
 
-        Ssl ssl = Ssl.builder().enabled(true).truststore(store).build();
+        HttpClientProperties.Ssl ssl = HttpClientProperties.Ssl.builder()
+                .enabled(true)
+                .truststore(store)
+                .build();
 
         assertThatThrownBy(() -> SslContextBuilder.from(ssl).build())
                 .isInstanceOf(RuntimeException.class)
@@ -90,7 +105,10 @@ class SslContextBuilderTest {
                 .type("JKS")
                 .build();
 
-        Ssl ssl = Ssl.builder().enabled(true).truststore(store).build();
+        HttpClientProperties.Ssl ssl = HttpClientProperties.Ssl.builder()
+                .enabled(true)
+                .truststore(store)
+                .build();
 
         assertThatThrownBy(() -> SslContextBuilder.from(ssl).build())
                 .isInstanceOf(RuntimeException.class)
@@ -105,7 +123,10 @@ class SslContextBuilderTest {
                 .type("JKS")
                 .build();
 
-        Ssl ssl = Ssl.builder().enabled(true).truststore(store).build();
+        HttpClientProperties.Ssl ssl = HttpClientProperties.Ssl.builder()
+                .enabled(true)
+                .truststore(store)
+                .build();
 
         assertThatThrownBy(() -> SslContextBuilder.from(ssl).build())
                 .isInstanceOf(RuntimeException.class)
@@ -122,7 +143,10 @@ class SslContextBuilderTest {
                 .type("JKS")
                 .build();
 
-        Ssl ssl = Ssl.builder().enabled(true).truststore(store).build();
+        HttpClientProperties.Ssl ssl = HttpClientProperties.Ssl.builder()
+                .enabled(true)
+                .truststore(store)
+                .build();
 
         SSLContext result = SslContextBuilder.from(ssl).build();
         assertThat(result).isNotNull();
@@ -142,7 +166,10 @@ class SslContextBuilderTest {
                 .type("JKS")
                 .build();
 
-        Ssl ssl = Ssl.builder().enabled(true).truststore(store).build();
+        HttpClientProperties.Ssl ssl = HttpClientProperties.Ssl.builder()
+                .enabled(true)
+                .truststore(store)
+                .build();
 
         assertThatThrownBy(() -> SslContextBuilder.from(ssl).build())
                 .isInstanceOf(RuntimeException.class); // dummy file won't load

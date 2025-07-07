@@ -1,4 +1,4 @@
-package com.example.http.autoconfiguration.validation;
+package com.example.http.client.validation;
 
 import jakarta.validation.Constraint;
 import jakarta.validation.Payload;
