@@ -8,14 +8,12 @@ import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
 import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryRegistry;
 import io.github.resilience4j.springboot3.retry.autoconfigure.RetryProperties;
+import lombok.experimental.UtilityClass;
 
-public final class ResilienceInstanceFactory {
+@UtilityClass
+public class ResilienceInstanceFactory {
 
-    private ResilienceInstanceFactory() {
-        // static utility
-    }
-
-    public static CircuitBreaker getCircuitBreaker(
+    public CircuitBreaker getCircuitBreaker(
             String clientName, CircuitBreakerRegistry registry, RestClientProperties.Resilience resilience) {
 
         if (registry.find(clientName).isPresent()) {
@@ -25,8 +23,7 @@ public final class ResilienceInstanceFactory {
         return CircuitBreakerFactory.create(clientName, registry, resilience.getCircuitBreaker());
     }
 
-    public static Retry getRetry(
-            String clientName, RetryRegistry registry, RestClientProperties.Resilience resilience) {
+    public Retry getRetry(String clientName, RetryRegistry registry, RestClientProperties.Resilience resilience) {
 
         if (registry.find(clientName).isPresent()) {
             return registry.retry(clientName);
@@ -36,7 +33,7 @@ public final class ResilienceInstanceFactory {
         return RetryFactory.create(clientName, registry, props);
     }
 
-    public static RateLimiter getRateLimiter(
+    public RateLimiter getRateLimiter(
             String clientName, RateLimiterRegistry registry, RestClientProperties.Resilience resilience) {
 
         if (registry.find(clientName).isPresent()) {

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.example.http.autoconfiguration.properties.HttpClientProperties;
 import com.example.http.autoconfiguration.properties.HttpClientProperties.Ssl;
+import com.example.http.autoconfiguration.properties.HttpClientProperties.Store;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
@@ -73,21 +74,31 @@ class HttpClientConfigurerTest {
     }
 
     @Test
-    void configureSslEnabledWithBadKeyStoreThrowsRuntimeException() {
-        HttpClientProperties props = HttpClientProperties.builder()
-                .ssl(Ssl.builder()
-                        .enabled(true)
-                        .trustAll(false)
-                        .trustStorePath("nonexistent.jks")
-                        .trustStorePassword("pw")
-                        .keyStorePath("nonexistent.jks")
-                        .keyStorePassword("pw")
-                        .build())
+    void configureSslEnabledWithBadStoresThrowsRuntimeException() {
+        Store badTrustStore = Store.builder()
+                .location("classpath:nonexistent-trust.jks")
+                .password("pw")
+                .type("JKS")
                 .build();
+
+        Store badKeyStore = Store.builder()
+                .location("classpath:nonexistent-key.p12")
+                .password("pw")
+                .type("PKCS12")
+                .build();
+
+        Ssl ssl = Ssl.builder()
+                .enabled(true)
+                .trustAll(false)
+                .truststore(badTrustStore)
+                .keystore(badKeyStore)
+                .build();
+
+        HttpClientProperties props = HttpClientProperties.builder().ssl(ssl).build();
 
         assertThatThrownBy(() -> HttpClientConfigurer.configure(props))
                 .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("Failed to configure SSL context")
+                .hasMessageContaining("Failed to build SSL context")
                 .hasRootCauseInstanceOf(Exception.class);
     }
 }

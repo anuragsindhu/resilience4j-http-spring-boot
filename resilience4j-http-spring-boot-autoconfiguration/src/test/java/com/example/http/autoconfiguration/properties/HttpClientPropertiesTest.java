@@ -15,7 +15,6 @@ class HttpClientPropertiesTest {
         HttpClientProperties fromDefaults = HttpClientProperties.defaultConfig();
         HttpClientProperties explicitDefaults = HttpClientDefaultSettings.defaultHttpClient();
 
-        // defaultConfig() should equal both builder default and defaultHttpClient()
         assertThat(fromBuilder).isEqualTo(fromDefaults);
         assertThat(fromDefaults).isEqualTo(explicitDefaults);
     }
@@ -51,10 +50,10 @@ class HttpClientPropertiesTest {
                 HttpClientProperties.Pool.Socket.builder().build();
 
         assertThat(sockFromSettings).isEqualTo(sockFromBuilder);
-        assertThat(sockFromSettings.getLingerTimeout()).isEqualTo(Duration.ofSeconds(2));
-        assertThat(sockFromSettings.getReceiveBufferSize()).isEqualTo(8192);
-        assertThat(sockFromSettings.getSendBufferSize()).isEqualTo(8192);
-        assertThat(sockFromSettings.getSocketTimeout()).isEqualTo(Duration.ofSeconds(10));
+        assertThat(sockFromSettings.getSoLinger()).isEqualTo(Duration.ofSeconds(-1));
+        assertThat(sockFromSettings.getRcvBuffSize()).isEqualTo(32 * 1024);
+        assertThat(sockFromSettings.getSndBuffSize()).isEqualTo(32 * 1024);
+        assertThat(sockFromSettings.getSoTimeout()).isEqualTo(Duration.ofSeconds(10));
         assertThat(sockFromSettings.isTcpNoDelay()).isTrue();
     }
 
@@ -79,30 +78,29 @@ class HttpClientPropertiesTest {
         assertThat(sslFromSettings).isEqualTo(sslFromBuilder);
         assertThat(sslFromSettings.isEnabled()).isFalse();
         assertThat(sslFromSettings.isTrustAll()).isFalse();
-        assertThat(sslFromSettings.getTrustStorePath()).isNull();
-        assertThat(sslFromSettings.getTrustStorePassword()).isNull();
-        assertThat(sslFromSettings.getKeyStorePath()).isNull();
-        assertThat(sslFromSettings.getKeyStorePassword()).isNull();
+        assertThat(sslFromSettings.getTruststore()).isNull();
+        assertThat(sslFromSettings.getKeystore()).isNull();
         assertThat(sslFromSettings.getHostnameVerifierBeanName()).isNull();
         assertThat(sslFromSettings.getHostnameVerifier()).isNull();
-        assertThat(sslFromSettings.getHostnameVerificationPolicy()).isEqualTo(HostnameVerificationPolicy.CLIENT);
+        assertThat(sslFromSettings.getHostnameVerificationPolicy()).isEqualTo(HostnameVerificationPolicy.BUILTIN);
     }
 
     @Test
     void builderOverridesEverything() {
-        // custom pool
         HttpClientProperties.Pool.Connection customConn = HttpClientProperties.Pool.Connection.builder()
                 .idleEvictionTimeout(Duration.ZERO)
                 .timeToLive(Duration.ZERO)
                 .validateAfterInactivity(Duration.ZERO)
                 .build();
+
         HttpClientProperties.Pool.Socket customSock = HttpClientProperties.Pool.Socket.builder()
-                .lingerTimeout(Duration.ZERO)
-                .receiveBufferSize(1)
-                .sendBufferSize(2)
-                .socketTimeout(Duration.ZERO)
+                .soLinger(Duration.ZERO)
+                .rcvBuffSize(1)
+                .sndBuffSize(2)
+                .soTimeout(Duration.ZERO)
                 .tcpNoDelay(false)
                 .build();
+
         HttpClientProperties.Pool customPool = HttpClientProperties.Pool.builder()
                 .concurrencyPolicy("STRICT")
                 .maxConnectionsPerRoute(1)
@@ -111,25 +109,35 @@ class HttpClientPropertiesTest {
                 .socket(customSock)
                 .build();
 
-        // custom request factory
         HttpClientProperties.RequestFactory customRf = HttpClientProperties.RequestFactory.builder()
                 .connectTimeout(Duration.ofMillis(11))
                 .connectionRequestTimeout(Duration.ofMillis(22))
                 .readTimeout(Duration.ofMillis(33))
                 .build();
 
-        // custom SSL
+        HttpClientProperties.Store trust = HttpClientProperties.Store.builder()
+                .location("/trust.jks")
+                .password("secret")
+                .type("JKS")
+                .provider("SUN")
+                .build();
+
+        HttpClientProperties.Store key = HttpClientProperties.Store.builder()
+                .location("/key.p12")
+                .password("secret")
+                .type("PKCS12")
+                .provider("BC")
+                .build();
+
         HostnameVerifier verifier = (h, s) -> true;
         HttpClientProperties.Ssl customSsl = HttpClientProperties.Ssl.builder()
                 .enabled(true)
                 .trustAll(true)
-                .trustStorePath("/t")
-                .trustStorePassword("tp")
-                .keyStorePath("/k")
-                .keyStorePassword("kp")
-                .hostnameVerifierBeanName("bean")
+                .truststore(trust)
+                .keystore(key)
+                .hostnameVerifierBeanName("beanVerifier")
                 .hostnameVerifier(verifier)
-                .hostnameVerificationPolicy(HostnameVerificationPolicy.CLIENT)
+                .hostnameVerificationPolicy(HostnameVerificationPolicy.BOTH)
                 .build();
 
         HttpClientProperties props = HttpClientProperties.builder()
@@ -143,5 +151,8 @@ class HttpClientPropertiesTest {
         assertThat(props.getPool()).isSameAs(customPool);
         assertThat(props.getRequestFactory()).isSameAs(customRf);
         assertThat(props.getSsl()).isSameAs(customSsl);
+        assertThat(props.getSsl().getTruststore()).isSameAs(trust);
+        assertThat(props.getSsl().getKeystore()).isSameAs(key);
+        assertThat(props.getSsl().getHostnameVerificationPolicy()).isEqualTo(HostnameVerificationPolicy.BOTH);
     }
 }

@@ -21,7 +21,6 @@ import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
 import io.github.resilience4j.ratelimiter.RequestNotPermitted;
-import io.github.resilience4j.retry.RetryConfig;
 import io.github.resilience4j.retry.RetryRegistry;
 import io.github.resilience4j.springboot3.circuitbreaker.autoconfigure.CircuitBreakerProperties;
 import io.github.resilience4j.springboot3.ratelimiter.autoconfigure.RateLimiterProperties;
@@ -31,12 +30,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Stream;
@@ -48,7 +45,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
@@ -117,9 +113,6 @@ class RestClientBuilderIntegrationTest {
         RestClientProperties.Resilience resilience = RestClientProperties.Resilience.builder()
                 .retryEnabled(true)
                 .retry(RestClientProperties.RetryWrapper.builder()
-                        .config(io.github.resilience4j.retry.RetryConfig.custom()
-                                .maxAttempts(3)
-                                .build())
                         .retryStatus(Set.of(HttpStatus.SERVICE_UNAVAILABLE))
                         .build())
                 .build();
@@ -254,24 +247,20 @@ class RestClientBuilderIntegrationTest {
     void concurrentRequestsUnderLimitsShouldAllSucceed() throws Exception {
         // lower delay to 50ms so 20 threads finish well within timeout
         wm.stubFor(get("/fast")
-            .willReturn(aResponse()
-                .withFixedDelay(50)
-                .withStatus(200)
-                .withBody("OK")));
+                .willReturn(aResponse().withFixedDelay(50).withStatus(200).withBody("OK")));
 
         HttpClientProperties.Pool pool = HttpClientProperties.Pool.builder()
-            .maxTotalConnections(20)
-            .maxConnectionsPerRoute(20)
-            .build();
+                .maxTotalConnections(20)
+                .maxConnectionsPerRoute(20)
+                .build();
 
-        HttpClientProperties httpProps = HttpClientProperties.builder()
-            .pool(pool)
-            .build();
+        HttpClientProperties httpProps =
+                HttpClientProperties.builder().pool(pool).build();
 
         RestClientProperties props = RestClientProperties.builder()
-            .baseUrl(baseUrl)
-            .httpClient(httpProps)
-            .build();
+                .baseUrl(baseUrl)
+                .httpClient(httpProps)
+                .build();
 
         RestClient client = builder.client("concurrentOK", props).build();
 
@@ -280,16 +269,14 @@ class RestClientBuilderIntegrationTest {
         List<Future<String>> futures = new ArrayList<>(threads);
 
         for (int i = 0; i < threads; i++) {
-            futures.add(exec.submit(() ->
-                client.get().uri("/fast").retrieve().body(String.class)
-            ));
+            futures.add(exec.submit(() -> client.get().uri("/fast").retrieve().body(String.class)));
         }
 
         // give up to 3 seconds for each future
         for (Future<String> f : futures) {
             assertThat(f.get(3, TimeUnit.SECONDS))
-                .as("each concurrent response")
-                .isEqualTo("OK");
+                    .as("each concurrent response")
+                    .isEqualTo("OK");
         }
 
         exec.shutdownNow();
@@ -300,32 +287,26 @@ class RestClientBuilderIntegrationTest {
     void singleConnectionPoolForcesSequentialExecution() throws Exception {
         int delayMs = 300;
         wm.stubFor(get("/slow")
-            .willReturn(aResponse()
-                .withFixedDelay(delayMs)
-                .withStatus(200)
-                .withBody("OK")));
+                .willReturn(aResponse().withFixedDelay(delayMs).withStatus(200).withBody("OK")));
 
         // Pool size = 1 connection
         HttpClientProperties.Pool pool = HttpClientProperties.Pool.builder()
-            .maxTotalConnections(1)
-            .maxConnectionsPerRoute(1)
-            .build();
+                .maxTotalConnections(1)
+                .maxConnectionsPerRoute(1)
+                .build();
 
-        var httpProps = HttpClientProperties.builder()
-            .pool(pool)
-            .build();
+        var httpProps = HttpClientProperties.builder().pool(pool).build();
 
         var props = RestClientProperties.builder()
-            .baseUrl(baseUrl)
-            .httpClient(httpProps)
-            .build();
+                .baseUrl(baseUrl)
+                .httpClient(httpProps)
+                .build();
 
         RestClient client = builder.client("sequential", props).build();
 
         ExecutorService exec = Executors.newFixedThreadPool(2);
 
-        Callable<String> task = () ->
-            client.get().uri("/slow").retrieve().body(String.class);
+        Callable<String> task = () -> client.get().uri("/slow").retrieve().body(String.class);
 
         // Measure wall‐clock time for both calls
         long start = System.nanoTime();
@@ -342,9 +323,7 @@ class RestClientBuilderIntegrationTest {
 
         long minExpected = TimeUnit.MILLISECONDS.toNanos(delayMs * 2);
         // Allow a bit of overhead but ensure it's at least 2× the delay
-        assertThat(elapsedNanos)
-            .as("Total elapsed for two sequential calls")
-            .isGreaterThanOrEqualTo(minExpected);
+        assertThat(elapsedNanos).as("Total elapsed for two sequential calls").isGreaterThanOrEqualTo(minExpected);
     }
 
     @ParameterizedTest(name = "{0}")
@@ -417,9 +396,6 @@ class RestClientBuilderIntegrationTest {
                                 b -> b.resilience(RestClientProperties.Resilience.builder()
                                         .retryEnabled(true)
                                         .retry(RestClientProperties.RetryWrapper.builder()
-                                                .config(RetryConfig.custom()
-                                                        .maxAttempts(3)
-                                                        .build())
                                                 .retryStatus(Set.of(HttpStatus.BAD_GATEWAY))
                                                 .build())
                                         .build()),
@@ -455,9 +431,6 @@ class RestClientBuilderIntegrationTest {
                                 b -> b.resilience(RestClientProperties.Resilience.builder()
                                         .retryEnabled(true)
                                         .retry(RestClientProperties.RetryWrapper.builder()
-                                                .config(RetryConfig.custom()
-                                                        .maxAttempts(2)
-                                                        .build())
                                                 .build())
                                         .build()),
                                 () -> {
@@ -486,9 +459,6 @@ class RestClientBuilderIntegrationTest {
                                         .retryEnabled(true)
                                         .circuitBreakerEnabled(true)
                                         .retry(RestClientProperties.RetryWrapper.builder()
-                                                .config(RetryConfig.custom()
-                                                        .maxAttempts(2)
-                                                        .build())
                                                 .retryStatus(Set.of(HttpStatus.INTERNAL_SERVER_ERROR))
                                                 .build())
                                         .circuitBreaker(newCbProps(2, 50.0f, Duration.ofMillis(200)))

@@ -1,6 +1,7 @@
 package com.example.http.autoconfiguration;
 
 import com.example.http.autoconfiguration.builder.RestClientBuilder;
+import com.example.http.autoconfiguration.properties.RestClientProperties;
 import com.example.http.autoconfiguration.properties.RestClientsProperties;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
@@ -43,7 +44,7 @@ public class ResilientRestClientAutoConfiguration {
     @ConditionalOnMissingBean(name = "resilientRestClients")
     public Map<String, RestClient> resilientRestClients() {
         Map<String, RestClient> clients = new LinkedHashMap<>();
-        for (Map.Entry<String, com.example.http.autoconfiguration.properties.RestClientProperties> entry :
+        for (Map.Entry<String, RestClientProperties> entry :
                 clientProperties.getClients().entrySet()) {
 
             String name = entry.getKey();

@@ -70,11 +70,6 @@ class CombinedResilienceObservabilityIntegrationTest {
     static void props(DynamicPropertyRegistry reg) {
         String base = wm.getRuntimeInfo().getHttpBaseUrl();
         reg.add("group.http.clients.combined-o11y.base-url", () -> base);
-        // retry
-        reg.add("group.http.clients.combined-o11y.resilience.retry-enabled", () -> "true");
-        reg.add("group.http.clients.combined-o11y.resilience.retry.max-attempts", () -> "3");
-        reg.add("group.http.clients.combined-o11y.resilience.retry.wait-duration", () -> "PT0S");
-        reg.add("group.http.clients.combined-o11y.resilience.retry.retry-status[0]", () -> "INTERNAL_SERVER_ERROR");
 
         // circuit-breaker
         reg.add("group.http.clients.combined-o11y.resilience.circuit-breaker-enabled", () -> "true");
@@ -86,6 +81,12 @@ class CombinedResilienceObservabilityIntegrationTest {
         reg.add("group.http.clients.combined-o11y.resilience.rate-limiter.limit-for-period", () -> "10");
         reg.add("group.http.clients.combined-o11y.resilience.rate-limiter.limit-refresh-period", () -> "PT1S");
         reg.add("group.http.clients.combined-o11y.resilience.rate-limiter.timeout-duration", () -> "PT0S");
+
+        // retry
+        reg.add("group.http.clients.combined-o11y.resilience.retry-enabled", () -> "true");
+        reg.add("group.http.clients.combined-o11y.resilience.retry.max-attempts", () -> "3");
+        reg.add("group.http.clients.combined-o11y.resilience.retry.wait-duration", () -> "PT0.001S");
+        reg.add("group.http.clients.combined-o11y.resilience.retry.retry-status[0]", () -> "INTERNAL_SERVER_ERROR");
     }
 
     @BeforeEach

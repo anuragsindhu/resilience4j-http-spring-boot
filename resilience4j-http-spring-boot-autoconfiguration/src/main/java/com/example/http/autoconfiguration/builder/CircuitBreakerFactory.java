@@ -4,15 +4,17 @@ import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.springboot3.circuitbreaker.autoconfigure.CircuitBreakerProperties;
+import lombok.experimental.UtilityClass;
 
+@UtilityClass
 public final class CircuitBreakerFactory {
 
-    private CircuitBreakerFactory() {
-        // static utility
-    }
-
-    public static CircuitBreaker create(
+    public CircuitBreaker create(
             String name, CircuitBreakerRegistry registry, CircuitBreakerProperties.InstanceProperties props) {
+        if (props == null) {
+            return null;
+        }
+
         CircuitBreakerConfig.Builder builder = CircuitBreakerConfig.custom();
 
         if (props.getAutomaticTransitionFromOpenToHalfOpenEnabled() != null) {

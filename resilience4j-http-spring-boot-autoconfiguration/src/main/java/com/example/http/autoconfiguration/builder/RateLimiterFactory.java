@@ -4,15 +4,17 @@ import io.github.resilience4j.ratelimiter.RateLimiter;
 import io.github.resilience4j.ratelimiter.RateLimiterConfig;
 import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
 import io.github.resilience4j.springboot3.ratelimiter.autoconfigure.RateLimiterProperties;
+import lombok.experimental.UtilityClass;
 
+@UtilityClass
 public final class RateLimiterFactory {
 
-    private RateLimiterFactory() {
-        // static utility
-    }
-
-    public static RateLimiter create(
+    public RateLimiter create(
             String name, RateLimiterRegistry registry, RateLimiterProperties.InstanceProperties props) {
+        if (props == null) {
+            return null;
+        }
+
         RateLimiterConfig.Builder builder = RateLimiterConfig.custom();
 
         if (props.getLimitForPeriod() != null) {

@@ -82,4 +82,24 @@ class RestClientBuilderTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("HttpClient configuration is disabled.");
     }
+
+    @Test
+    void buildSkipsInterceptorWhenResilienceDisabled() {
+        RestClientProperties.Resilience disabledResilience = RestClientProperties.Resilience.builder()
+                .circuitBreakerEnabled(false)
+                .retryEnabled(false)
+                .rateLimiterEnabled(false)
+                .build();
+
+        RestClientProperties props = RestClientProperties.builder()
+                .baseUrl("http://example.com")
+                .resilience(disabledResilience)
+                .build();
+
+        RestClient client = builder.client("noResilience", props).build();
+
+        // We can't directly inspect the interceptor, but we can validate that it built without error
+        // and—optionally—observe indirect effects via additional instrumentation later if exposed.
+        assertThat(client).isNotNull();
+    }
 }

@@ -103,36 +103,45 @@ public class RestClientBuilder {
             // 2) Build underlying request‐factory
             var factory = HttpClientConfigurer.configure(httpProps);
 
-            // 3) Obtain resilience instances
+            // 3) Obtain resilience configuration
             var resilienceConfig = props.getResilience() != null
                     ? props.getResilience()
                     : RestClientDefaultSettings.defaultResilience();
-            CircuitBreaker cb =
-                    ResilienceInstanceFactory.getCircuitBreaker(name, circuitBreakerRegistry, resilienceConfig);
-            Retry retry = ResilienceInstanceFactory.getRetry(name, retryRegistry, resilienceConfig);
-            RateLimiter rl = ResilienceInstanceFactory.getRateLimiter(name, rateLimiterRegistry, resilienceConfig);
 
-            // 4) Decide which statuses to retry
-            Set<HttpStatus> statuses = resilienceConfig.isRetryEnabled()
-                    ? resilienceConfig.getRetry().getRetryStatus()
-                    : Collections.emptySet();
+            // 4) Conditionally resolve resilience instances
+            CircuitBreaker cb = resilienceConfig.isCircuitBreakerEnabled()
+                    ? ResilienceInstanceFactory.getCircuitBreaker(name, circuitBreakerRegistry, resilienceConfig)
+                    : null;
+            Retry retry = resilienceConfig.isRetryEnabled()
+                    ? ResilienceInstanceFactory.getRetry(name, retryRegistry, resilienceConfig)
+                    : null;
+            RateLimiter rl = resilienceConfig.isRateLimiterEnabled()
+                    ? ResilienceInstanceFactory.getRateLimiter(name, rateLimiterRegistry, resilienceConfig)
+                    : null;
 
-            // 5) Build the interceptor
-            var interceptor = ResilienceHttpRequestInterceptor.builder(observationRegistry)
-                    .clientName(name)
-                    .observationTags(props.getObservationTags())
-                    .circuitBreaker(cb)
-                    .retry(retry)
-                    .retryStatus(statuses)
-                    .rateLimiter(rl)
-                    .build();
+            // 5) Only attach interceptor if any resilience is enabled
+            var restClientBuilder =
+                    RestClient.builder().baseUrl(props.getBaseUrl()).requestFactory(factory);
 
-            // 6) Final RestClient
-            return RestClient.builder()
-                    .baseUrl(props.getBaseUrl())
-                    .requestFactory(factory)
-                    .requestInterceptor(interceptor)
-                    .build();
+            boolean shouldConfigureInterceptor = cb != null || retry != null || rl != null;
+            if (shouldConfigureInterceptor) {
+                Set<HttpStatus> statuses =
+                        retry != null ? resilienceConfig.getRetry().getRetryStatus() : Collections.emptySet();
+
+                var interceptor = ResilienceHttpRequestInterceptor.builder(observationRegistry)
+                        .clientName(name)
+                        .observationTags(props.getObservationTags())
+                        .circuitBreaker(cb)
+                        .retry(retry)
+                        .retryStatus(statuses)
+                        .rateLimiter(rl)
+                        .build();
+
+                restClientBuilder.requestInterceptor(interceptor);
+            }
+
+            // 6) Return built RestClient
+            return restClientBuilder.build();
         }
     }
 }

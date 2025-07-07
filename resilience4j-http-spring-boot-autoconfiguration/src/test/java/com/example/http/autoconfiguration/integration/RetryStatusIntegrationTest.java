@@ -44,7 +44,7 @@ class RetryStatusIntegrationTest {
                 "group.http.clients.retry-status.resilience.retry.retry-status",
                 () -> "TOO_MANY_REQUESTS,BAD_GATEWAY,SERVICE_UNAVAILABLE");
         registry.add("group.http.clients.retry-status.resilience.retry.max-attempts", () -> "4");
-        registry.add("group.http.clients.retry-status.resilience.retry.wait-duration", () -> "PT0S");
+        registry.add("group.http.clients.retry-status.resilience.retry.wait-duration", () -> "PT0.001S");
     }
 
     @Autowired

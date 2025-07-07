@@ -5,14 +5,16 @@ import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryConfig;
 import io.github.resilience4j.retry.RetryRegistry;
 import io.github.resilience4j.springboot3.retry.autoconfigure.RetryProperties;
+import lombok.experimental.UtilityClass;
 
+@UtilityClass
 public final class RetryFactory {
 
-    private RetryFactory() {
-        // static utility
-    }
+    public Retry create(String name, RetryRegistry registry, RetryProperties.InstanceProperties props) {
+        if (props == null) {
+            return null;
+        }
 
-    public static Retry create(String name, RetryRegistry registry, RetryProperties.InstanceProperties props) {
         RetryConfig.Builder builder = RetryConfig.custom();
 
         if (props.getFailAfterMaxAttempts() != null) {
@@ -45,37 +47,16 @@ public final class RetryFactory {
     }
 
     private static IntervalFunction configureIntervalFunction(RetryProperties.InstanceProperties props) {
-        IntervalFunction intervalFn = null;
-
-        if (props.getWaitDuration() != null) {
-            if (props.getExponentialBackoffMultiplier() != null
-                    && props.getRandomizedWaitFactor() != null
-                    && props.getExponentialMaxWaitDuration() != null) {
-                intervalFn = IntervalFunction.ofExponentialRandomBackoff(
-                        props.getWaitDuration(),
-                        props.getExponentialBackoffMultiplier(),
-                        props.getRandomizedWaitFactor(),
-                        props.getExponentialMaxWaitDuration());
-            } else if (props.getExponentialBackoffMultiplier() != null
-                    && props.getRandomizedWaitFactor() != null
-                    && props.getExponentialMaxWaitDuration() == null) {
-                intervalFn = IntervalFunction.ofExponentialRandomBackoff(
-                        props.getWaitDuration(),
-                        props.getExponentialBackoffMultiplier(),
-                        props.getRandomizedWaitFactor());
-            } else if (props.getExponentialBackoffMultiplier() != null && props.getRandomizedWaitFactor() != null) {
-                intervalFn = IntervalFunction.ofExponentialRandomBackoff(
-                        props.getWaitDuration(),
-                        props.getExponentialBackoffMultiplier(),
-                        props.getRandomizedWaitFactor());
-            } else if (props.getRandomizedWaitFactor() != null) {
-                intervalFn =
-                        IntervalFunction.ofExponentialBackoff(props.getWaitDuration(), props.getRandomizedWaitFactor());
-            } else if (props.getWaitDuration().toMillis() > 0) {
-                intervalFn = IntervalFunction.of(props.getWaitDuration());
-            }
+        if (props == null || props.getWaitDuration() == null) {
+            return null;
         }
 
-        return intervalFn;
+        return IntervalFunction.ofExponentialRandomBackoff(
+                props.getWaitDuration(),
+                props.getExponentialBackoffMultiplier() != null ? props.getExponentialBackoffMultiplier() : 2.0,
+                props.getRandomizedWaitFactor() != null ? props.getRandomizedWaitFactor() : 0.5,
+                props.getExponentialMaxWaitDuration() != null
+                        ? props.getExponentialMaxWaitDuration()
+                        : props.getWaitDuration().multipliedBy(10));
     }
 }

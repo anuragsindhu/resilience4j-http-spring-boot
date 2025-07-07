@@ -54,7 +54,7 @@ class ObservabilityIntegrationTest {
         String base = wm.getRuntimeInfo().getHttpBaseUrl();
 
         registry.add("group.http.clients.o11y.base-url", () -> base);
-        registry.add("group.http.clients.o11y.resilience.retry-enabled", () -> "false");
+        registry.add("group.http.clients.o11y.resilience.retry-enabled", () -> "true");
         registry.add("group.http.clients.o11y.resilience.circuit-breaker-enabled", () -> "false");
         registry.add("group.http.clients.o11y.resilience.rate-limiter-enabled", () -> "false");
         registry.add("group.http.clients.o11y.observation-tags.team", () -> "infra");

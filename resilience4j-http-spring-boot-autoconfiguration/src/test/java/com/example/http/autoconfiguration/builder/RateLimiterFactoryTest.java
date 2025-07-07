@@ -14,6 +14,12 @@ class RateLimiterFactoryTest {
     private final RateLimiterRegistry registry = RateLimiterRegistry.ofDefaults();
 
     @Test
+    void shouldReturnNullWhenPropsIsNull() {
+        RateLimiter result = RateLimiterFactory.create("test-limiter", RateLimiterRegistry.ofDefaults(), null);
+        assertThat(result).isNull();
+    }
+
+    @Test
     void createWithDefaultsUsesRegistryDefaults() {
         RateLimiterProperties.InstanceProperties props = new RateLimiterProperties.InstanceProperties();
         RateLimiter limiter = RateLimiterFactory.create("defaultLimiter", registry, props);

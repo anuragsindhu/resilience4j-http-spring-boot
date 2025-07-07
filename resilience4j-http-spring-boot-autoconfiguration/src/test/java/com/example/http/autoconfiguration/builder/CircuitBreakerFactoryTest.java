@@ -14,6 +14,12 @@ class CircuitBreakerFactoryTest {
     private final CircuitBreakerRegistry registry = CircuitBreakerRegistry.ofDefaults();
 
     @Test
+    void shouldReturnNullWhenPropsIsNull() {
+        CircuitBreaker result = CircuitBreakerFactory.create("test-circuit", CircuitBreakerRegistry.ofDefaults(), null);
+        assertThat(result).isNull();
+    }
+
+    @Test
     void createWithDefaultsUsesRegistryDefaults() {
         CircuitBreakerProperties.InstanceProperties props = new CircuitBreakerProperties.InstanceProperties();
         // all props null → use registry defaults

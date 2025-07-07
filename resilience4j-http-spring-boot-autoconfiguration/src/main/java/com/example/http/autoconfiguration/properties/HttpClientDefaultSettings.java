@@ -1,6 +1,7 @@
 package com.example.http.autoconfiguration.properties;
 
 import java.time.Duration;
+import org.apache.hc.client5.http.ssl.HostnameVerificationPolicy;
 
 public final class HttpClientDefaultSettings {
 
@@ -35,10 +36,10 @@ public final class HttpClientDefaultSettings {
 
     public static HttpClientProperties.Pool.Socket defaultSocket() {
         return HttpClientProperties.Pool.Socket.builder()
-                .lingerTimeout(Duration.ofSeconds(2))
-                .receiveBufferSize(8192)
-                .sendBufferSize(8192)
-                .socketTimeout(Duration.ofSeconds(10))
+                .soLinger(Duration.ofSeconds(-1))
+                .rcvBuffSize(32 * 1024)
+                .sndBuffSize(32 * 1024)
+                .soTimeout(Duration.ofSeconds(10))
                 .tcpNoDelay(true)
                 .build();
     }
@@ -55,7 +56,7 @@ public final class HttpClientDefaultSettings {
         return HttpClientProperties.Ssl.builder()
                 .enabled(false)
                 .trustAll(false)
-                .hostnameVerificationPolicy(org.apache.hc.client5.http.ssl.HostnameVerificationPolicy.CLIENT)
+                .hostnameVerificationPolicy(HostnameVerificationPolicy.BUILTIN)
                 .build();
     }
 }

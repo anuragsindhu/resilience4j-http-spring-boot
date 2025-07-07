@@ -25,15 +25,17 @@ class HttpClientDefaultSettingsTest {
 
         // nested connection
         var conn = pool.getConnection();
+        assertThat(conn.getConnectTimeout()).isEqualTo(Duration.ofSeconds(2));
         assertThat(conn.getIdleEvictionTimeout()).isEqualTo(Duration.ofMinutes(1));
         assertThat(conn.getTimeToLive()).isEqualTo(Duration.ofMinutes(5));
         assertThat(conn.getValidateAfterInactivity()).isEqualTo(Duration.ofSeconds(30));
 
         // nested socket
         var sock = pool.getSocket();
-        assertThat(sock.getLingerTimeout()).isEqualTo(Duration.ofSeconds(2));
-        assertThat(sock.getReceiveBufferSize()).isEqualTo(8192);
-        assertThat(sock.getSocketTimeout()).isEqualTo(Duration.ofSeconds(10));
+        assertThat(sock.getRcvBuffSize()).isEqualTo(32 * 1024);
+        assertThat(sock.getSndBuffSize()).isEqualTo(32 * 1024);
+        assertThat(sock.getSoLinger()).isEqualTo(Duration.ofSeconds(-1));
+        assertThat(sock.getSoTimeout()).isEqualTo(Duration.ofSeconds(10));
         assertThat(sock.isTcpNoDelay()).isTrue();
     }
 
@@ -50,6 +52,6 @@ class HttpClientDefaultSettingsTest {
         var ssl = HttpClientDefaultSettings.defaultSsl();
         assertThat(ssl.isEnabled()).isFalse();
         assertThat(ssl.isTrustAll()).isFalse();
-        assertThat(ssl.getHostnameVerificationPolicy()).isEqualTo(HostnameVerificationPolicy.CLIENT);
+        assertThat(ssl.getHostnameVerificationPolicy()).isEqualTo(HostnameVerificationPolicy.BUILTIN);
     }
 }
