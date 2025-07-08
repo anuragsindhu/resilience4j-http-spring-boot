@@ -2,16 +2,12 @@ package com.example.http.autoconfiguration.builder;
 
 import com.example.http.autoconfiguration.logging.ResilienceEventPublisherLogger;
 import com.example.http.autoconfiguration.observation.ResilienceObservationTagContributor;
-import com.example.http.autoconfiguration.properties.RestClientProperties;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
-import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.core.functions.CheckedSupplier;
 import io.github.resilience4j.ratelimiter.RateLimiter;
-import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
 import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import io.github.resilience4j.retry.Retry;
-import io.github.resilience4j.retry.RetryRegistry;
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationRegistry;
 import java.io.IOException;
@@ -26,8 +22,8 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.client.ClientHttpRequestExecution;
 import org.springframework.http.client.ClientHttpRequestInterceptor;
 import org.springframework.http.client.ClientHttpResponse;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
-import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClientException;
 
 @Slf4j
@@ -70,42 +66,46 @@ public class ResilienceHttpRequestInterceptor implements ClientHttpRequestInterc
                     CheckedSupplier<ClientHttpResponse> supplier = () -> {
                         ClientHttpResponse rsp = execution.execute(request, body);
                         HttpStatusCode code = rsp.getStatusCode();
+                        HttpStatus hs = HttpStatus.resolve(code.value());
 
-                        boolean shouldRetry;
-                        if (retryStatus == null || retryStatus.isEmpty()) {
-                            shouldRetry = code.is5xxServerError();
-                        } else {
-                            HttpStatus hs = HttpStatus.resolve(code.value());
-                            shouldRetry = hs != null && retryStatus.contains(hs);
-                        }
+                        boolean shouldRetry = hs != null && retryStatus != null && retryStatus.contains(hs);
 
                         if (shouldRetry) {
-                            HttpStatus hs = HttpStatus.valueOf(code.value());
-                            throw new HttpServerErrorException(hs, "Server error (retryable): " + hs.value());
+                            if (hs.is4xxClientError()) {
+                                throw new HttpClientErrorException(hs, "Client error (retryable): " + hs.value());
+                            } else if (hs.is5xxServerError()) {
+                                throw new HttpServerErrorException(hs, "Server error (retryable): " + hs.value());
+                            } else {
+                                throw new RestClientException("Unexpected retryable status: " + hs);
+                            }
                         }
+
+                        if (hs != null && hs.is5xxServerError()) {
+                            throw new HttpServerErrorException(hs, "Server error: " + hs.value());
+                        }
+
                         return rsp;
                     };
 
-                    // Decorate Retry → CircuitBreaker → RateLimiter
+                    // Wrap: Retry → CircuitBreaker → RateLimiter
                     if (retry != null) {
-                        // innermost: retry a few times on transient failures
                         supplier = Retry.decorateCheckedSupplier(retry, supplier);
                     }
                     if (circuitBreaker != null) {
-                        // next: one “logical call” per invocation counted toward CB
                         supplier = CircuitBreaker.decorateCheckedSupplier(circuitBreaker, supplier);
                     }
                     if (rateLimiter != null) {
-                        // outermost: one permit consumed per invocation (not per retry)
                         supplier = RateLimiter.decorateCheckedSupplier(rateLimiter, supplier);
                     }
 
-                    // Execute and unwrap
                     try {
                         return supplier.get();
                     } catch (UncheckedIOException uio) {
                         throw uio.getCause();
-                    } catch (CallNotPermittedException | HttpStatusCodeException | RequestNotPermitted ex) {
+                    } catch (CallNotPermittedException
+                            | HttpClientErrorException
+                            | HttpServerErrorException
+                            | RequestNotPermitted ex) {
                         throw ex;
                     } catch (Throwable t) {
                         if (t.getCause() instanceof CallNotPermittedException cnpe) {
@@ -117,43 +117,6 @@ public class ResilienceHttpRequestInterceptor implements ClientHttpRequestInterc
                         throw new RestClientException("Resilience4j call failed", t);
                     }
                 }));
-    }
-
-    public static ResilienceHttpRequestInterceptor createFromConfig(
-            CircuitBreakerRegistry circuitBreakerRegistry,
-            RateLimiterRegistry rlRegistry,
-            RetryRegistry retryRegistry,
-            RestClientProperties.Resilience resilience,
-            String clientName,
-            Map<String, String> observationTags,
-            ObservationRegistry registry) {
-
-        if (resilience == null
-                || !(resilience.isRetryEnabled()
-                        || resilience.isCircuitBreakerEnabled()
-                        || resilience.isRateLimiterEnabled())) {
-            return null;
-        }
-
-        Builder builder = new Builder(registry != null ? registry : ObservationRegistry.NOOP)
-                .clientName(Objects.requireNonNull(clientName, "clientName is required"))
-                .observationTags(observationTags);
-
-        if (resilience.isRetryEnabled()) {
-            builder.retry(ResilienceInstanceFactory.getRetry(clientName, retryRegistry, resilience))
-                    .retryStatus(resilience.getRetry().getRetryStatus());
-        }
-
-        if (resilience.isCircuitBreakerEnabled()) {
-            builder.circuitBreaker(
-                    ResilienceInstanceFactory.getCircuitBreaker(clientName, circuitBreakerRegistry, resilience));
-        }
-
-        if (resilience.isRateLimiterEnabled()) {
-            builder.rateLimiter(ResilienceInstanceFactory.getRateLimiter(clientName, rlRegistry, resilience));
-        }
-
-        return builder.build();
     }
 
     public static class Builder {

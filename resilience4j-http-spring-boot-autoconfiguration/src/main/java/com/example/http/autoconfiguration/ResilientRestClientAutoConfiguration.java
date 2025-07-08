@@ -1,8 +1,8 @@
 package com.example.http.autoconfiguration;
 
 import com.example.http.autoconfiguration.builder.RestClientBuilder;
-import com.example.http.autoconfiguration.properties.RestClientProperties;
-import com.example.http.autoconfiguration.properties.RestClientsProperties;
+import com.example.http.autoconfiguration.property.RestClientProperties;
+import com.example.http.autoconfiguration.property.RestClientsProperties;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
 import io.github.resilience4j.retry.RetryRegistry;

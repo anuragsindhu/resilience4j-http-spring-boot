@@ -10,54 +10,57 @@ import com.example.http.autoconfiguration.TestApplication;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import java.util.Map;
+import lombok.SneakyThrows;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpStatus;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.web.client.RestClient;
 
 @SpringBootTest(classes = TestApplication.class)
 class CircuitBreakerIntegrationTest {
+    @Autowired
+    private CircuitBreakerRegistry registry;
 
     @RegisterExtension
-    static WireMockExtension wm = WireMockExtension.newInstance()
+    static WireMockExtension wiremock = WireMockExtension.newInstance()
             .options(WireMockConfiguration.wireMockConfig().dynamicPort())
             .build();
 
     @DynamicPropertySource
-    static void props(DynamicPropertyRegistry registry) {
-        registry.add("group.http.clients.cb.base-url", () -> wm.getRuntimeInfo().getHttpBaseUrl());
+    static void overrideProperties(DynamicPropertyRegistry registry) {
+        registry.add("group.http.clients.cb.base-url", () -> wiremock.getRuntimeInfo()
+                .getHttpBaseUrl());
         registry.add("group.http.clients.cb.resilience.circuit-breaker-enabled", () -> "true");
-        registry.add("group.http.clients.cb.resilience.circuit-breaker.failure-rate-threshold", () -> "50.0");
-        registry.add("group.http.clients.cb.resilience.circuit-breaker.sliding-window-size", () -> "2");
+        registry.add("group.http.clients.cb.resilience.circuit-breaker.sliding-window-size", () -> "3");
+        registry.add("group.http.clients.cb.resilience.circuit-breaker.minimum-number-of-calls", () -> "3");
     }
 
     @Autowired
     private Map<String, RestClient> clients;
 
     @BeforeEach
-    void stubAlways500() {
-        configureFor("localhost", wm.getRuntimeInfo().getHttpPort());
-
-        // every call to /unstable returns HTTP 500
-        stubFor(get("/unstable").willReturn(aResponse().withStatus(500)));
+    void configureStubs() {
+        configureFor("localhost", wiremock.getRuntimeInfo().getHttpPort());
+        stubFor(get("/unstable").willReturn(aResponse().withStatus(HttpStatus.INTERNAL_SERVER_ERROR.value())));
     }
 
     @Test
-    void circuitOpensAfterFailures() {
+    @SneakyThrows
+    void circuitShouldOpenAfterFailureThresholdIsMet() {
         RestClient client = clients.get("cb");
 
-        // first two calls fail, counting toward circuit threshold
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < 3; i++) {
             assertThatThrownBy(() -> client.get().uri("/unstable").retrieve().body(String.class))
                     .hasMessageContaining("500");
         }
 
-        // third call should be short-circuited
         assertThatThrownBy(() -> client.get().uri("/unstable").retrieve().body(String.class))
                 .isInstanceOf(CallNotPermittedException.class);
     }

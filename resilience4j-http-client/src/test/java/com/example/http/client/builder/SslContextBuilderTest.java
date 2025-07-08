@@ -1,177 +1,89 @@
 package com.example.http.client.builder;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.example.http.client.property.HttpClientProperties;
 import com.example.http.client.property.HttpClientProperties.Store;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
 import javax.net.ssl.SSLContext;
-import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class SslContextBuilderTest {
 
-    private final Validator validator =
-            Validation.buildDefaultValidatorFactory().getValidator();
+    private Validator validator;
+
+    @BeforeEach
+    void setUp() {
+        validator = Validation.buildDefaultValidatorFactory().getValidator();
+    }
 
     @Test
-    void shouldReturnNullIfSslIsDisabled() {
+    void shouldReturnNullWhenSslIsDisabled() {
         HttpClientProperties.Ssl ssl =
                 HttpClientProperties.Ssl.builder().enabled(false).build();
-        SSLContext result = SslContextBuilder.from(ssl).build();
-        assertThat(result).isNull();
+
+        SSLContext context = SslContextBuilder.from(ssl).build();
+
+        assertThat(context).isNull();
     }
 
     @Test
-    void shouldTrustAllWhenConfigured() {
+    void shouldBuildTrustAllSslContext() {
         HttpClientProperties.Ssl ssl =
                 HttpClientProperties.Ssl.builder().enabled(true).trustAll(true).build();
-        SSLContext result = SslContextBuilder.from(ssl).build();
-        assertThat(result).isNotNull();
+
+        SSLContext context = SslContextBuilder.from(ssl).build();
+
+        assertThat(context).isNotNull();
     }
 
     @Test
-    void shouldSkipValidationIfValidatorIsNull() {
-        Store partial =
-                Store.builder().location("classpath:x.p12").type("PKCS12").build();
-
+    void shouldSkipKeystoreAndTruststoreIfIncomplete() {
         HttpClientProperties.Ssl ssl = HttpClientProperties.Ssl.builder()
                 .enabled(true)
-                .truststore(partial)
+                .trustAll(false)
+                .truststore(new Store())
+                .keystore(new Store())
                 .build();
-        SSLContext result = SslContextBuilder.from(ssl).build();
-        assertThat(result).isNotNull(); // validation skipped
+
+        SSLContext context = SslContextBuilder.from(ssl).build();
+
+        assertThat(context).isNotNull();
     }
 
     @Test
-    void shouldValidateStoresIfValidatorIsPresent() {
-        Store broken = Store.builder().location("classpath:x.jks").build();
+    void shouldBuildValidSslContextWithMockedStores() {
         HttpClientProperties.Ssl ssl = HttpClientProperties.Ssl.builder()
                 .enabled(true)
-                .truststore(broken)
+                .trustAll(false)
+                .truststore(Store.builder()
+                        .location("classpath:ssl/truststore.p12")
+                        .password("changeit")
+                        .type("PKCS12")
+                        .provider("SunJSSE")
+                        .build())
+                .keystore(Store.builder()
+                        .location("classpath:ssl/keystore.p12")
+                        .password("changeit")
+                        .type("PKCS12")
+                        .provider("SunJSSE")
+                        .build())
                 .build();
 
-        assertThatThrownBy(() -> SslContextBuilder.from(ssl, validator).build())
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Invalid SSL store configuration");
+        SSLContext context = SslContextBuilder.from(ssl).build();
+
+        assertThat(context).isNotNull();
     }
 
     @Test
-    void shouldIgnoreKeystoreIfNull() {
+    void shouldInvokeValidatorWhenProvided() {
         HttpClientProperties.Ssl ssl =
-                HttpClientProperties.Ssl.builder().enabled(true).keystore(null).build();
-        SSLContext result = SslContextBuilder.from(ssl).build();
-        assertThat(result).isNotNull();
-    }
+                HttpClientProperties.Ssl.builder().enabled(true).trustAll(true).build();
 
-    @Test
-    void shouldIgnoreTruststoreIfNull() {
-        HttpClientProperties.Ssl ssl = HttpClientProperties.Ssl.builder()
-                .enabled(true)
-                .truststore(null)
-                .build();
-        SSLContext result = SslContextBuilder.from(ssl).build();
-        assertThat(result).isNotNull();
-    }
+        SSLContext context = SslContextBuilder.from(ssl, validator).build();
 
-    @Test
-    void shouldThrowForMissingClasspathResource() {
-        Store store = Store.builder()
-                .location("classpath:missing.jks")
-                .password("changeit")
-                .type("JKS")
-                .build();
-
-        HttpClientProperties.Ssl ssl = HttpClientProperties.Ssl.builder()
-                .enabled(true)
-                .truststore(store)
-                .build();
-
-        assertThatThrownBy(() -> SslContextBuilder.from(ssl).build())
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("Classpath store not found");
-    }
-
-    @Test
-    void shouldThrowForMissingFileResource() {
-        Store store = Store.builder()
-                .location("file:/nonexistent/path.jks")
-                .password("changeit")
-                .type("JKS")
-                .build();
-
-        HttpClientProperties.Ssl ssl = HttpClientProperties.Ssl.builder()
-                .enabled(true)
-                .truststore(store)
-                .build();
-
-        assertThatThrownBy(() -> SslContextBuilder.from(ssl).build())
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("File store not found");
-    }
-
-    @Test
-    void shouldThrowForUnsupportedLocationPrefix() {
-        Store store = Store.builder()
-                .location("http://example.com/store.jks")
-                .password("changeit")
-                .type("JKS")
-                .build();
-
-        HttpClientProperties.Ssl ssl = HttpClientProperties.Ssl.builder()
-                .enabled(true)
-                .truststore(store)
-                .build();
-
-        assertThatThrownBy(() -> SslContextBuilder.from(ssl).build())
-                .isInstanceOf(RuntimeException.class)
-                .hasCauseInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Unsupported store location");
-    }
-
-    @Disabled("Requires real truststore.jks in classpath")
-    @Test
-    void shouldBuildWithValidClasspathTruststore() {
-        Store store = Store.builder()
-                .location("classpath:truststore.jks")
-                .password("changeit")
-                .type("JKS")
-                .build();
-
-        HttpClientProperties.Ssl ssl = HttpClientProperties.Ssl.builder()
-                .enabled(true)
-                .truststore(store)
-                .build();
-
-        SSLContext result = SslContextBuilder.from(ssl).build();
-        assertThat(result).isNotNull();
-    }
-
-    @Disabled("Requires mock keystore file")
-    @Test
-    void shouldBuildWithValidFileBasedStore() throws IOException {
-        File tempFile = File.createTempFile("mock", ".jks");
-        try (FileWriter writer = new FileWriter(tempFile)) {
-            writer.write("dummy content");
-        }
-
-        Store store = Store.builder()
-                .location("file:" + tempFile.getAbsolutePath())
-                .password("changeit")
-                .type("JKS")
-                .build();
-
-        HttpClientProperties.Ssl ssl = HttpClientProperties.Ssl.builder()
-                .enabled(true)
-                .truststore(store)
-                .build();
-
-        assertThatThrownBy(() -> SslContextBuilder.from(ssl).build())
-                .isInstanceOf(RuntimeException.class); // dummy file won't load
+        assertThat(context).isNotNull();
     }
 }

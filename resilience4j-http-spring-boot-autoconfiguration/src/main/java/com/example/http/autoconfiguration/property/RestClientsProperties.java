@@ -1,4 +1,4 @@
-package com.example.http.autoconfiguration.properties;
+package com.example.http.autoconfiguration.property;
 
 import java.util.Map;
 import lombok.AllArgsConstructor;

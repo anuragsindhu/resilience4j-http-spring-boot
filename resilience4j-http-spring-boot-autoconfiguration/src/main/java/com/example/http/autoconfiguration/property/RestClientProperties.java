@@ -1,4 +1,4 @@
-package com.example.http.autoconfiguration.properties;
+package com.example.http.autoconfiguration.property;
 
 import com.example.http.client.property.HttpClientProperties;
 import io.github.resilience4j.common.retry.configuration.CommonRetryConfigurationProperties;
@@ -44,7 +44,6 @@ public class RestClientProperties {
     @Builder.Default
     private RequestFactory requestFactory = RestClientDefaultSettings.defaultRequestFactory();
 
-    /** Factory for the builder’s defaults. */
     public static RestClientProperties defaultConfig() {
         return RestClientProperties.builder().build();
     }
@@ -69,11 +68,11 @@ public class RestClientProperties {
                 RestClientDefaultSettings.defaultCircuitBreakerProperties();
 
         @Builder.Default
-        private RetryWrapper retry = RestClientDefaultSettings.defaultRetryWrapper();
-
-        @Builder.Default
         private RateLimiterProperties.InstanceProperties rateLimiter =
                 RestClientDefaultSettings.defaultRateLimiterProperties();
+
+        @Builder.Default
+        private RetryWrapper retry = RestClientDefaultSettings.defaultRetryWrapper();
     }
 
     @Data

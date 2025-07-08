@@ -1,9 +1,9 @@
 package com.example.http.client.builder;
 
 import com.example.http.client.property.HttpClientProperties;
+import com.example.http.client.util.ResourceUtils;
 import com.example.http.client.validation.SslValidator;
 import jakarta.validation.Validator;
-import java.io.FileInputStream;
 import java.io.InputStream;
 import java.security.KeyStore;
 import java.util.Objects;
@@ -81,7 +81,7 @@ public class SslContextBuilder {
                     ? KeyStore.getInstance(store.getType(), store.getProvider())
                     : KeyStore.getInstance(store.getType());
 
-            try (InputStream is = resolveStream(store.getLocation())) {
+            try (InputStream is = ResourceUtils.resolveStream(store.getLocation())) {
                 keyStore.load(is, store.getPassword().toCharArray());
             }
 
@@ -90,25 +90,6 @@ public class SslContextBuilder {
         } catch (Exception e) {
             log.error("Failed to load {} from {}: {}", label, store.getLocation(), e.getMessage());
             throw e;
-        }
-    }
-
-    private InputStream resolveStream(String location) {
-        if (location.startsWith("classpath:")) {
-            String path = location.substring("classpath:".length());
-            InputStream stream = Thread.currentThread().getContextClassLoader().getResourceAsStream(path);
-            if (stream == null) {
-                throw new IllegalArgumentException("Classpath store not found: " + location);
-            }
-            return stream;
-        } else if (location.startsWith("file:")) {
-            try {
-                return new FileInputStream(location.substring("file:".length()));
-            } catch (Exception e) {
-                throw new IllegalArgumentException("File store not found: " + location, e);
-            }
-        } else {
-            throw new IllegalArgumentException("Unsupported store location: " + location);
         }
     }
 

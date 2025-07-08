@@ -2,8 +2,8 @@ package com.example.http.autoconfiguration.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.example.http.autoconfiguration.properties.RestClientProperties;
-import com.example.http.autoconfiguration.properties.RestClientsProperties;
+import com.example.http.autoconfiguration.property.RestClientProperties;
+import com.example.http.autoconfiguration.property.RestClientsProperties;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

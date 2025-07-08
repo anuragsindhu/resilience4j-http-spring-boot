@@ -21,7 +21,7 @@ public final class ResilienceEventPublisherLogger {
                             "Circuit breaker[{}] error recorded: {}",
                             cb.getName(),
                             event.getThrowable().toString()))
-                    .onSuccess(event -> log.debug(
+                    .onSuccess(event -> log.info(
                             "Circuit breaker[{}] call succeeded in {}ms",
                             cb.getName(),
                             event.getElapsedDuration().toMillis()));
@@ -52,10 +52,10 @@ public final class ResilienceEventPublisherLogger {
         if (rl != null) {
             rl.getEventPublisher()
                     .onSuccess(event ->
-                            log.debug("Rate limiter[{}] permission granted: {}", rl.getName(), event.getEventType()))
+                            log.info("Rate limiter[{}] permission granted: {}", rl.getName(), event.getEventType()))
                     .onFailure(
                             event -> log.warn("Rate limiter[{}] call blocked: {}", rl.getName(), event.getEventType()))
-                    .onEvent(event -> log.trace("Rate limiter[{}] full event: {}", rl.getName(), event));
+                    .onEvent(event -> log.info("Rate limiter[{}] full event: {}", rl.getName(), event));
         }
     }
 }

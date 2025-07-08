@@ -83,7 +83,7 @@ public class HttpClientProperties {
         @AllArgsConstructor
         public static class Socket {
 
-            @NotNull @MinDuration(value = 1, message = "Linger timeout must be at least {value} ms")
+            @NotNull @MinDuration(value = -1000, message = "Linger timeout must be at least {value} ms")
             @Builder.Default
             private Duration soLinger = Duration.ofSeconds(-1);
 

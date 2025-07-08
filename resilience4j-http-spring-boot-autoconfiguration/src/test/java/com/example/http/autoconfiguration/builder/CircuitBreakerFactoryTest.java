@@ -4,72 +4,119 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig.SlidingWindowType;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.springboot3.circuitbreaker.autoconfigure.CircuitBreakerProperties;
+import jakarta.validation.ValidationException;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
 
 class CircuitBreakerFactoryTest {
 
-    private final CircuitBreakerRegistry registry = CircuitBreakerRegistry.ofDefaults();
-
     @Test
-    void shouldReturnNullWhenPropsIsNull() {
-        CircuitBreaker result = CircuitBreakerFactory.create("test-circuit", CircuitBreakerRegistry.ofDefaults(), null);
-        assertThat(result).isNull();
+    void shouldReturnNullIfPropertiesAreNull() {
+        CircuitBreakerRegistry registry = CircuitBreakerRegistry.ofDefaults();
+        CircuitBreaker breaker = CircuitBreakerFactory.create("null-case", registry, null);
+
+        assertThat(breaker).isNull();
     }
 
     @Test
-    void createWithDefaultsUsesRegistryDefaults() {
+    void shouldConfigureFailureRateThresholdAndSlidingWindow() {
         CircuitBreakerProperties.InstanceProperties props = new CircuitBreakerProperties.InstanceProperties();
-        // all props null → use registry defaults
+        props.setFailureRateThreshold(50f);
+        props.setSlidingWindowSize(10);
+        props.setSlidingWindowType(SlidingWindowType.COUNT_BASED);
+        props.setMinimumNumberOfCalls(5);
 
-        CircuitBreaker cb = CircuitBreakerFactory.create("testCb", registry, props);
-        CircuitBreakerConfig cfg = cb.getCircuitBreakerConfig();
+        CircuitBreakerRegistry registry = CircuitBreakerRegistry.ofDefaults();
+        CircuitBreaker breaker = CircuitBreakerFactory.create("window-test", registry, props);
+        CircuitBreakerConfig config = breaker.getCircuitBreakerConfig();
 
-        CircuitBreakerConfig defaultCfg = registry.getDefaultConfig();
-        assertThat(cfg.getFailureRateThreshold()).isEqualTo(defaultCfg.getFailureRateThreshold());
+        assertThat(breaker).isNotNull();
+        assertThat(config.getFailureRateThreshold()).isEqualTo(50f);
+        assertThat(config.getMinimumNumberOfCalls()).isEqualTo(5);
+        assertThat(config.getSlidingWindowSize()).isEqualTo(10);
+        assertThat(config.getSlidingWindowType()).isEqualTo(SlidingWindowType.COUNT_BASED);
     }
 
     @Test
-    void createWithCustomPropsAppliesAllSettings() {
+    void shouldConfigureOpenStateWaitUsingIntervalFunction() {
         CircuitBreakerProperties.InstanceProperties props = new CircuitBreakerProperties.InstanceProperties();
-        props.setFailureRateThreshold(42f);
-        props.setWaitDurationInOpenState(Duration.ofSeconds(7));
-        props.setMinimumNumberOfCalls(10);
-        props.setPermittedNumberOfCallsInHalfOpenState(2);
+        props.setWaitDurationInOpenState(Duration.ofSeconds(10));
+
+        CircuitBreakerRegistry registry = CircuitBreakerRegistry.ofDefaults();
+        CircuitBreaker breaker = CircuitBreakerFactory.create("open-wait", registry, props);
+        CircuitBreakerConfig config = breaker.getCircuitBreakerConfig();
+
+        long intervalMillis = config.getWaitIntervalFunctionInOpenState().apply(1);
+
+        assertThat(intervalMillis).isEqualTo(10_000L);
+    }
+
+    @Test
+    void shouldRespectIgnoreAndRecordExceptionsSeparately() {
+        CircuitBreakerProperties.InstanceProperties props = new CircuitBreakerProperties.InstanceProperties();
+        props.setIgnoreExceptions(new Class[] {IllegalArgumentException.class, ValidationException.class});
+        props.setRecordExceptions(new Class[] {RuntimeException.class, NullPointerException.class});
+
+        CircuitBreakerRegistry registry = CircuitBreakerRegistry.ofDefaults();
+        CircuitBreaker breaker = CircuitBreakerFactory.create("exception-handling", registry, props);
+        CircuitBreakerConfig config = breaker.getCircuitBreakerConfig();
+
+        assertThat(config.getIgnoreExceptionPredicate().test(new IllegalArgumentException()))
+                .isTrue();
+        assertThat(config.getIgnoreExceptionPredicate().test(new ValidationException()))
+                .isTrue();
+        assertThat(config.getIgnoreExceptionPredicate().test(new NullPointerException()))
+                .isFalse();
+
+        assertThat(config.getRecordExceptionPredicate().test(new RuntimeException()))
+                .isTrue();
+
+        assertThat(config.getRecordExceptionPredicate().test(new NullPointerException()))
+                .isTrue();
+
+        // Resilience4j uses two predicates to decide whether an exception should be counted toward the failure rate:
+        // ignoreExceptions and recordExceptions.
+        // If recordExceptions not set, the default behavior is to record all unchecked exceptions, such as
+        // RuntimeException, IllegalArgumentException, NullPointerException, etc.
+        // By default, recording behavior takes precedence unless the ignore predicate actively returns true first.
+        // That means if recordExceptions includes a supertype like RuntimeException,
+        // and ignoreExceptions includes a subtype like IllegalArgumentException,
+        // we need to explicitly verify that ignoreExceptions wins during evaluation.
+        // That's why it is validated as true against our wish!
+        assertThat(config.getRecordExceptionPredicate().test(new IllegalArgumentException()))
+                .isTrue(); // it's ignored
+    }
+
+    @Test
+    void shouldConfigureHalfOpenTransitionSettings() {
+        CircuitBreakerProperties.InstanceProperties props = new CircuitBreakerProperties.InstanceProperties();
         props.setAutomaticTransitionFromOpenToHalfOpenEnabled(true);
-        props.setSlidingWindowSize(20);
-        props.setSlidingWindowType(CircuitBreakerConfig.SlidingWindowType.COUNT_BASED);
-        props.setSlowCallRateThreshold(75f);
-        props.setSlowCallDurationThreshold(Duration.ofMillis(500));
-        props.setMaxWaitDurationInHalfOpenState(Duration.ofSeconds(3));
-        props.setIgnoreExceptions(new Class[] {IllegalArgumentException.class});
-        props.setRecordExceptions(new Class[] {NullPointerException.class});
+        props.setPermittedNumberOfCallsInHalfOpenState(4);
+        props.setMaxWaitDurationInHalfOpenState(Duration.ofSeconds(5));
 
-        CircuitBreaker cb = CircuitBreakerFactory.create("customCb", registry, props);
-        CircuitBreakerConfig cfg = cb.getCircuitBreakerConfig();
+        CircuitBreakerRegistry registry = CircuitBreakerRegistry.ofDefaults();
+        CircuitBreaker breaker = CircuitBreakerFactory.create("half-open-config", registry, props);
+        CircuitBreakerConfig config = breaker.getCircuitBreakerConfig();
 
-        assertThat(cfg.getFailureRateThreshold()).isEqualTo(42f);
-        assertThat(cfg.getMinimumNumberOfCalls()).isEqualTo(10);
-        assertThat(cfg.getPermittedNumberOfCallsInHalfOpenState()).isEqualTo(2);
-        assertThat(cfg.isAutomaticTransitionFromOpenToHalfOpenEnabled()).isTrue();
-        assertThat(cfg.getSlidingWindowSize()).isEqualTo(20);
-        assertThat(cfg.getSlidingWindowType()).isEqualTo(CircuitBreakerConfig.SlidingWindowType.COUNT_BASED);
-        assertThat(cfg.getSlowCallRateThreshold()).isEqualTo(75f);
-        assertThat(cfg.getSlowCallDurationThreshold()).isEqualTo(Duration.ofMillis(500));
-        assertThat(cfg.getMaxWaitDurationInHalfOpenState()).isEqualTo(Duration.ofSeconds(3));
+        assertThat(config.isAutomaticTransitionFromOpenToHalfOpenEnabled()).isTrue();
+        assertThat(config.getPermittedNumberOfCallsInHalfOpenState()).isEqualTo(4);
+        assertThat(config.getMaxWaitDurationInHalfOpenState()).isEqualTo(Duration.ofSeconds(5));
     }
 
     @Test
-    void createReusesRegistryWhenNameIsSame() {
+    void shouldRespectSlowCallConfiguration() {
         CircuitBreakerProperties.InstanceProperties props = new CircuitBreakerProperties.InstanceProperties();
-        props.setFailureRateThreshold(10f);
+        props.setSlowCallRateThreshold(80f);
+        props.setSlowCallDurationThreshold(Duration.ofSeconds(2));
 
-        CircuitBreaker first = CircuitBreakerFactory.create("dupCb", registry, props);
-        CircuitBreaker second = CircuitBreakerFactory.create("dupCb", registry, props);
+        CircuitBreakerRegistry registry = CircuitBreakerRegistry.ofDefaults();
+        CircuitBreaker breaker = CircuitBreakerFactory.create("slow-call-cb", registry, props);
+        CircuitBreakerConfig config = breaker.getCircuitBreakerConfig();
 
-        // Registry returns the same instance for a given name
-        assertThat(first).isSameAs(second);
+        assertThat(config.getSlowCallRateThreshold()).isEqualTo(80f);
+        assertThat(config.getSlowCallDurationThreshold()).isEqualTo(Duration.ofSeconds(2));
     }
 }

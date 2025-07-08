@@ -1,7 +1,7 @@
 package com.example.http.autoconfiguration.builder;
 
-import com.example.http.autoconfiguration.properties.RestClientDefaultSettings;
-import com.example.http.autoconfiguration.properties.RestClientProperties;
+import com.example.http.autoconfiguration.property.RestClientDefaultSettings;
+import com.example.http.autoconfiguration.property.RestClientProperties;
 import com.example.http.client.builder.HttpClientConfigurer;
 import com.example.http.client.property.HttpClientDefaultSettings;
 import com.example.http.client.property.HttpClientProperties;

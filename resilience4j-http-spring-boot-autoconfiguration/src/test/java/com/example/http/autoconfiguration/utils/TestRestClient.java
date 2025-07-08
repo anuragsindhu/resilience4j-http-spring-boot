@@ -1,6 +1,6 @@
 package com.example.http.autoconfiguration.utils;
 
-import com.example.http.autoconfiguration.properties.RestClientProperties;
+import com.example.http.autoconfiguration.property.RestClientProperties;
 import com.example.http.client.builder.HttpClientConfigurer;
 import java.util.Map;
 import org.springframework.http.HttpMethod;

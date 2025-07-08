@@ -1,156 +1,152 @@
 package com.example.http.client.property;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
+import com.example.http.client.validation.SslStoreGroup;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
+import jakarta.validation.ValidatorFactory;
 import java.time.Duration;
-import javax.net.ssl.HostnameVerifier;
+import java.util.Set;
 import org.apache.hc.client5.http.ssl.HostnameVerificationPolicy;
+import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class HttpClientPropertiesTest {
 
-    @Test
-    void defaultConfigMatchesDefaultSettings() {
-        HttpClientProperties fromBuilder = HttpClientProperties.builder().build();
-        HttpClientProperties fromDefaults = HttpClientProperties.defaultConfig();
-        HttpClientProperties explicitDefaults = HttpClientDefaultSettings.defaultHttpClient();
+    private Validator validator;
 
-        assertThat(fromBuilder).isEqualTo(fromDefaults);
-        assertThat(fromDefaults).isEqualTo(explicitDefaults);
+    @BeforeEach
+    void setUp() {
+        ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
+        validator = factory.getValidator();
     }
 
     @Test
-    void defaultSettingsPoolMatchesPoolDefaults() {
-        HttpClientProperties.Pool poolFromSettings = HttpClientDefaultSettings.defaultPool();
-        HttpClientProperties.Pool poolFromBuilder =
-                HttpClientProperties.Pool.builder().build();
+    void shouldCreateDefaultHttpClientProperties() {
+        HttpClientProperties props = HttpClientProperties.defaultConfig();
 
-        assertThat(poolFromSettings).isEqualTo(poolFromBuilder);
-        assertThat(poolFromSettings.getConcurrencyPolicy()).isEqualTo("LAX");
-        assertThat(poolFromSettings.getMaxConnectionsPerRoute()).isEqualTo(20);
-        assertThat(poolFromSettings.getMaxTotalConnections()).isEqualTo(200);
+        Assertions.assertThat(props).isNotNull();
+        Assertions.assertThat(props.getPool()).isNotNull();
+        Assertions.assertThat(props.getRequestFactory()).isNotNull();
+        Assertions.assertThat(props.getSsl()).isNotNull();
     }
 
     @Test
-    void defaultSettingsConnectionMatchesConnectionDefaults() {
-        HttpClientProperties.Pool.Connection connFromSettings = HttpClientDefaultSettings.defaultConnection();
-        HttpClientProperties.Pool.Connection connFromBuilder =
-                HttpClientProperties.Pool.Connection.builder().build();
-
-        assertThat(connFromSettings).isEqualTo(connFromBuilder);
-        assertThat(connFromSettings.getIdleEvictionTimeout()).isEqualTo(Duration.ofMinutes(1));
-        assertThat(connFromSettings.getTimeToLive()).isEqualTo(Duration.ofMinutes(5));
-        assertThat(connFromSettings.getValidateAfterInactivity()).isEqualTo(Duration.ofSeconds(30));
-    }
-
-    @Test
-    void defaultSettingsSocketMatchesSocketDefaults() {
-        HttpClientProperties.Pool.Socket sockFromSettings = HttpClientDefaultSettings.defaultSocket();
-        HttpClientProperties.Pool.Socket sockFromBuilder =
-                HttpClientProperties.Pool.Socket.builder().build();
-
-        assertThat(sockFromSettings).isEqualTo(sockFromBuilder);
-        assertThat(sockFromSettings.getSoLinger()).isEqualTo(Duration.ofSeconds(-1));
-        assertThat(sockFromSettings.getRcvBuffSize()).isEqualTo(32 * 1024);
-        assertThat(sockFromSettings.getSndBuffSize()).isEqualTo(32 * 1024);
-        assertThat(sockFromSettings.getSoTimeout()).isEqualTo(Duration.ofSeconds(10));
-        assertThat(sockFromSettings.isTcpNoDelay()).isTrue();
-    }
-
-    @Test
-    void defaultSettingsRequestFactoryMatchesDefaults() {
-        HttpClientProperties.RequestFactory rfFromSettings = HttpClientDefaultSettings.defaultRequestFactory();
-        HttpClientProperties.RequestFactory rfFromBuilder =
-                HttpClientProperties.RequestFactory.builder().build();
-
-        assertThat(rfFromSettings).isEqualTo(rfFromBuilder);
-        assertThat(rfFromSettings.getConnectTimeout()).isEqualTo(Duration.ofSeconds(5));
-        assertThat(rfFromSettings.getConnectionRequestTimeout()).isEqualTo(Duration.ofSeconds(2));
-        assertThat(rfFromSettings.getReadTimeout()).isEqualTo(Duration.ofSeconds(10));
-    }
-
-    @Test
-    void defaultSettingsSslMatchesDefaults() {
-        HttpClientProperties.Ssl sslFromSettings = HttpClientDefaultSettings.defaultSsl();
-        HttpClientProperties.Ssl sslFromBuilder =
-                HttpClientProperties.Ssl.builder().build();
-
-        assertThat(sslFromSettings).isEqualTo(sslFromBuilder);
-        assertThat(sslFromSettings.isEnabled()).isFalse();
-        assertThat(sslFromSettings.isTrustAll()).isFalse();
-        assertThat(sslFromSettings.getTruststore()).isNull();
-        assertThat(sslFromSettings.getKeystore()).isNull();
-        assertThat(sslFromSettings.getHostnameVerifierBeanName()).isNull();
-        assertThat(sslFromSettings.getHostnameVerifier()).isNull();
-        assertThat(sslFromSettings.getHostnameVerificationPolicy()).isEqualTo(HostnameVerificationPolicy.BUILTIN);
-    }
-
-    @Test
-    void builderOverridesEverything() {
-        HttpClientProperties.Pool.Connection customConn = HttpClientProperties.Pool.Connection.builder()
-                .idleEvictionTimeout(Duration.ZERO)
-                .timeToLive(Duration.ZERO)
-                .validateAfterInactivity(Duration.ZERO)
+    void shouldValidateConnectionPoolSettings() {
+        HttpClientProperties.Pool.Connection connection = HttpClientProperties.Pool.Connection.builder()
+                .connectTimeout(Duration.ofSeconds(2))
+                .idleEvictionTimeout(Duration.ofMinutes(1))
+                .timeToLive(Duration.ofMinutes(5))
+                .validateAfterInactivity(Duration.ofSeconds(30))
                 .build();
 
-        HttpClientProperties.Pool.Socket customSock = HttpClientProperties.Pool.Socket.builder()
-                .soLinger(Duration.ZERO)
-                .rcvBuffSize(1)
-                .sndBuffSize(2)
-                .soTimeout(Duration.ZERO)
-                .tcpNoDelay(false)
+        Set<ConstraintViolation<HttpClientProperties.Pool.Connection>> violations = validator.validate(connection);
+        Assertions.assertThat(violations).isEmpty();
+    }
+
+    @Test
+    void shouldTriggerValidationErrorsForInvalidConnection() {
+        HttpClientProperties.Pool.Connection connection = HttpClientProperties.Pool.Connection.builder()
+                .connectTimeout(null)
+                .idleEvictionTimeout(null)
+                .timeToLive(null)
+                .validateAfterInactivity(null)
                 .build();
 
-        HttpClientProperties.Pool customPool = HttpClientProperties.Pool.builder()
-                .concurrencyPolicy("STRICT")
-                .maxConnectionsPerRoute(1)
-                .maxTotalConnections(2)
-                .connection(customConn)
-                .socket(customSock)
+        Set<ConstraintViolation<HttpClientProperties.Pool.Connection>> violations = validator.validate(connection);
+        Assertions.assertThat(violations).hasSize(8);
+    }
+
+    @Test
+    void shouldValidateSocketSettings() {
+        HttpClientProperties.Pool.Socket socket = HttpClientProperties.Pool.Socket.builder()
+                .rcvBuffSize(32768)
+                .sndBuffSize(32768)
+                .soLinger(Duration.ofSeconds(-1))
+                .soTimeout(Duration.ofSeconds(10))
+                .tcpNoDelay(true)
                 .build();
 
-        HttpClientProperties.RequestFactory customRf = HttpClientProperties.RequestFactory.builder()
-                .connectTimeout(Duration.ofMillis(11))
-                .connectionRequestTimeout(Duration.ofMillis(22))
-                .readTimeout(Duration.ofMillis(33))
+        Set<ConstraintViolation<HttpClientProperties.Pool.Socket>> violations = validator.validate(socket);
+        Assertions.assertThat(violations).isEmpty();
+    }
+
+    @Test
+    void shouldValidateRequestFactorySettings() {
+        HttpClientProperties.RequestFactory factory = HttpClientProperties.RequestFactory.builder()
+                .connectTimeout(Duration.ofSeconds(5))
+                .connectionRequestTimeout(Duration.ofSeconds(2))
+                .readTimeout(Duration.ofSeconds(10))
                 .build();
 
-        HttpClientProperties.Store trust = HttpClientProperties.Store.builder()
-                .location("/trust.jks")
-                .password("secret")
+        Set<ConstraintViolation<HttpClientProperties.RequestFactory>> violations = validator.validate(factory);
+        Assertions.assertThat(violations).isEmpty();
+    }
+
+    @Test
+    void shouldValidateSslStoreSettings() {
+        HttpClientProperties.Store store = HttpClientProperties.Store.builder()
+                .location("classpath:truststore.jks")
+                .password("changeit")
+                .provider("SunJSSE")
                 .type("JKS")
-                .provider("SUN")
                 .build();
 
-        HttpClientProperties.Store key = HttpClientProperties.Store.builder()
-                .location("/key.p12")
-                .password("secret")
-                .type("PKCS12")
-                .provider("BC")
+        Set<ConstraintViolation<HttpClientProperties.Store>> violations =
+                validator.validate(store, SslStoreGroup.class);
+
+        Assertions.assertThat(violations).isEmpty();
+    }
+
+    @Test
+    void shouldTriggerValidationErrorsForInvalidSslStore() {
+        HttpClientProperties.Store store = HttpClientProperties.Store.builder()
+                .location("")
+                .password("")
+                .provider("A")
+                .type("")
                 .build();
 
-        HostnameVerifier verifier = (h, s) -> true;
-        HttpClientProperties.Ssl customSsl = HttpClientProperties.Ssl.builder()
-                .enabled(true)
-                .trustAll(true)
-                .truststore(trust)
-                .keystore(key)
-                .hostnameVerifierBeanName("beanVerifier")
-                .hostnameVerifier(verifier)
-                .hostnameVerificationPolicy(HostnameVerificationPolicy.BOTH)
-                .build();
+        Set<ConstraintViolation<HttpClientProperties.Store>> violations =
+                validator.validate(store, SslStoreGroup.class);
 
+        Assertions.assertThat(violations).hasSize(4);
+    }
+
+    @Test
+    void builderShouldSetAllPropertiesCorrectly() {
         HttpClientProperties props = HttpClientProperties.builder()
-                .pool(customPool)
-                .requestFactory(customRf)
-                .ssl(customSsl)
+                .pool(HttpClientDefaultSettings.defaultPool())
+                .requestFactory(HttpClientDefaultSettings.defaultRequestFactory())
+                .ssl(HttpClientDefaultSettings.defaultSsl())
                 .build();
 
-        assertThat(props.getPool()).isSameAs(customPool);
-        assertThat(props.getRequestFactory()).isSameAs(customRf);
-        assertThat(props.getSsl()).isSameAs(customSsl);
-        assertThat(props.getSsl().getTruststore()).isSameAs(trust);
-        assertThat(props.getSsl().getKeystore()).isSameAs(key);
-        assertThat(props.getSsl().getHostnameVerificationPolicy()).isEqualTo(HostnameVerificationPolicy.BOTH);
+        Assertions.assertThat(props.getPool().getConcurrencyPolicy()).isEqualTo("LAX");
+        Assertions.assertThat(props.getRequestFactory().getConnectTimeout()).isEqualTo(Duration.ofSeconds(5));
+        Assertions.assertThat(props.getSsl().getHostnameVerificationPolicy())
+                .isEqualTo(HostnameVerificationPolicy.BUILTIN);
+    }
+
+    @Test
+    void shouldSupportEmptySslConfiguration() {
+        HttpClientProperties.Ssl ssl = HttpClientProperties.Ssl.builder().build();
+
+        Assertions.assertThat(ssl.isEnabled()).isFalse();
+        Assertions.assertThat(ssl.isTrustAll()).isFalse();
+        Assertions.assertThat(ssl.getHostnameVerificationPolicy()).isEqualTo(HostnameVerificationPolicy.BUILTIN);
+    }
+
+    @Test
+    void storeShouldSupportEmptyProvider() {
+        HttpClientProperties.Store store = new HttpClientProperties.Store();
+
+        store.setLocation("classpath:test.jks");
+        store.setPassword("secret");
+        store.setProvider("SunJSSE");
+        store.setType("PKCS12");
+
+        Assertions.assertThat(store.getLocation()).isEqualTo("classpath:test.jks");
+        Assertions.assertThat(store.getType()).isEqualTo("PKCS12");
     }
 }
